@@ -17,12 +17,11 @@ import { useAuth } from "../contexts/AuthContext";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: FiHome },
-  { name: "Orders", href: "/orders", icon: FiShoppingCart },
-  { name: "Products", href: "/products", icon: FiPackage },
-  { name: "Categories", href: "/categories", icon: FiGrid },
-  { name: "Brands", href: "/brands", icon: FiTag },
-  { name: "Customers", href: "/customers", icon: FiUsers },
-  { name: "Settings", href: "/settings", icon: FiSettings },
+  { name: "Orders", href: "/dashboard/orders", icon: FiShoppingCart },
+  { name: "Products", href: "/dashboard/products", icon: FiPackage },
+  { name: "Categories", href: "/dashboard/categories", icon: FiGrid },
+  { name: "Brands", href: "/dashboard/brands", icon: FiTag },
+  { name: "Customers", href: "/dashboard/customers", icon: FiUsers },
 ];
 
 const DashboardLayout = () => {
@@ -39,7 +38,7 @@ const DashboardLayout = () => {
         }`}
       >
         <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-75"
+          className="fixed inset-0 bg-gray-600/70"
           onClick={() => setSidebarOpen(false)}
         />
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
@@ -61,6 +60,7 @@ const DashboardLayout = () => {
                 <Link
                   key={item.name}
                   to={item.href}
+                  onClick={() => setSidebarOpen(false)}
                   className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
                     isActive
                       ? "bg-primary-100 text-primary-900 "

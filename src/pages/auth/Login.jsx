@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "../../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -15,6 +16,7 @@ const loginSchema = z.object({
 const LoginPage = () => {
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   const {
     register,
@@ -27,9 +29,17 @@ const LoginPage = () => {
   const onSubmit = async (data) => {
     try {
       setIsLoading(true);
-      await login(data);
+      const { success, user } = await login(data);
+      if (success) {
+        if (user.role === "admin") {
+          navigate("/dashboard");
+        } else {
+          navigate("/");
+        }
+      }
     } catch (error) {
       // Error handled in AuthContext
+      console.error("Login error:", error);
     } finally {
       setIsLoading(false);
     }
