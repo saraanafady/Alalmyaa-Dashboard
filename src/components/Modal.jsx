@@ -1,6 +1,6 @@
 import React from "react";
 
-const Modal = ({ isOpen, onClose, title, children }) => {
+const Modal = ({ isOpen, onClose, title, children, size = "lg" }) => {
   if (!isOpen) return null;
 
   return (
@@ -15,7 +15,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
       <div className="flex items-center justify-center min-h-screen px-4 py-6">
         {/* Modal content */}
         <div
-          className="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-auto"
+          className={`relative bg-white rounded-lg shadow-xl max-w-${size} mx-auto`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}

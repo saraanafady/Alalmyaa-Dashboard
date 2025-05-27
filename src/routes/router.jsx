@@ -8,7 +8,9 @@ import CategoriesPage from "../pages/categories/CategoriesPage";
 import BrandsPage from "../pages/brands/BrandsPage";
 import LoginPage from "../pages/auth/Login";
 import ProtectedRoute from "../components/ProtectedRoute";
-
+import SignUp from "../pages/auth/SignUp";
+import CustomerLayout from "../layouts/CustomerLayout";
+import Main from "../pages/CustomerPages/main/Main";
 const router = createBrowserRouter([
   {
     path: "/dashboard",
@@ -27,8 +29,21 @@ const router = createBrowserRouter([
     ],
   },
   {
+    path: "/",
+    element: (
+      <ProtectedRoute role="user">
+        <CustomerLayout />
+      </ProtectedRoute>
+    ),
+    children: [{ index: true, element: <Main /> }],
+  },
+  {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/signup",
+    element: <SignUp />,
   },
 ]);
 
