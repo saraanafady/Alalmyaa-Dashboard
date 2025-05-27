@@ -1,41 +1,42 @@
-import React, { useState } from "react";
-import Card from "../../components/Card";
-import Table from "../../components/Table";
-import Button from "../../components/Button";
-import Modal from "../../components/Modal";
-import Input from "../../components/Input";
-import Badge from "../../components/Badge";
+import React, { useState, useEffect } from "react";
 import { FiEdit2, FiTrash2, FiPlus, FiX } from "react-icons/fi";
 import toast from "react-hot-toast";
-
-// Mock data
-const initialBrands = [
-  {
-    id: 1,
-    name: "Apple",
-    slug: "apple",
-    description: "Apple Inc. is an American multinational technology company",
-    logo: "https://example.com/apple-logo.png",
-    website: "https://www.apple.com",
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Samsung",
-    slug: "samsung",
-    description:
-      "Samsung Electronics is a South Korean multinational electronics corporation",
-    logo: "https://example.com/samsung-logo.png",
-    website: "https://www.samsung.com",
-    status: "Active",
-  },
-];
+import axios from "axios";
+import { base_url } from "../../constants/axiosConfig";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 
 const BrandsPage = () => {
-  const [brands, setBrands] = useState(initialBrands);
+  const queryClient = useQueryClient();
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [brandToDelete, setBrandToDelete] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      setImagePreview(selectedBrand?.logoUrl || null);
+    } else {
+      setImagePreview(null);
+    }
+  }, [isModalOpen, selectedBrand]);
+
+  const fetchBrands = async () => {
+    const { data } = await axios.get(`${base_url}/api/brand`);
+    return data.data.brands;
+  };
+
+  const {
+    data: brands = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["brands"],
+    queryFn: fetchBrands,
+  });
 
   const filteredBrands = brands.filter(
     (brand) =>
@@ -43,40 +44,166 @@ const BrandsPage = () => {
       brand.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this brand?")) {
-      setBrands(brands.filter((brand) => brand.id !== id));
+  const deleteBrandMutation = useMutation({
+    mutationFn: (id) => axios.delete(`${base_url}/api/brand/${id}`),
+    onSuccess: () => {
       toast.success("Brand deleted successfully");
-    }
-  };
+      queryClient.invalidateQueries(["brands"]);
+    },
+    onError: (err) => {
+      toast.error("Failed to delete brand");
+      console.error(err);
+    },
+  });
 
-  const handleStatusChange = (id, newStatus) => {
-    setBrands(
-      brands.map((brand) =>
-        brand.id === id ? { ...brand, status: newStatus } : brand
-      )
-    );
-    toast.success("Status updated successfully");
-  };
+  const statusChangeMutation = useMutation({
+    mutationFn: ({ id, newStatus }) =>
+      axios.patch(`${base_url}/api/brand/${id}/status`, { status: newStatus }),
+    onSuccess: () => {
+      toast.success("Status updated successfully");
+      queryClient.invalidateQueries(["brands"]);
+    },
+    onError: (err) => {
+      toast.error("Failed to update status");
+      console.error(err);
+    },
+  });
 
-  const handleSubmit = (data) => {
-    if (selectedBrand) {
-      setBrands(
-        brands.map((brand) =>
-          brand.id === selectedBrand.id ? { ...brand, ...data } : brand
-        )
-      );
-      toast.success("Brand updated successfully");
-    } else {
-      const newBrand = {
-        id: Math.max(...brands.map((b) => b.id)) + 1,
-        ...data,
-      };
-      setBrands([...brands, newBrand]);
+  const addBrandMutation = useMutation({
+    mutationFn: (formData) =>
+      axios.post(`${base_url}/api/brand`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }),
+    onSuccess: () => {
       toast.success("Brand added successfully");
+      queryClient.invalidateQueries(["brands"]);
+    },
+    onError: (err) => {
+      handleFormError(err);
+    },
+  });
+
+  const updateBrandMutation = useMutation({
+    mutationFn: ({ id, formData }) => {
+      return axios.patch(`${base_url}/api/brand/${id}`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Brand updated successfully");
+      queryClient.invalidateQueries(["brands"]);
+    },
+    onError: (err) => {
+      console.error("Update error:", err.response?.data);
+      handleFormError(err);
+    },
+  });
+
+  const handleFormError = (err) => {
+    if (err.response?.status === 413) {
+      toast.error("Image file is too large. Please choose a smaller file.");
+    } else {
+      toast.error("Failed to submit brand");
     }
-    setIsModalOpen(false);
+    console.error(err);
   };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData();
+
+    const name = e.target.name.value;
+    const description = e.target.description.value;
+    const website = e.target.website.value;
+    const status = e.target.status.value;
+    const logoFile = e.target.logo.files[0];
+
+    formData.append("name", name);
+    formData.append("description", description);
+    formData.append("websiteUrl", website);
+    formData.append("status", status);
+
+    if (logoFile) {
+      formData.append("logoUrl", logoFile);
+    }
+
+    try {
+      if (selectedBrand) {
+        const updateData = {
+          id: selectedBrand._id,
+          formData: formData,
+        };
+        await updateBrandMutation.mutateAsync(updateData);
+      } else {
+        await addBrandMutation.mutateAsync(formData);
+      }
+      setIsModalOpen(false);
+      setImagePreview(null);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      toast.error(error.response?.data?.message || "Failed to update brand");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Check file size (limit to 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("File size must be less than 5MB");
+        e.target.value = "";
+        return;
+      }
+
+      // Check file type
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please select an image file");
+        e.target.value = "";
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearImagePreview = () => {
+    setImagePreview(null);
+    const fileInput = document.getElementById("logo-upload");
+    if (fileInput) {
+      fileInput.value = "";
+    }
+    // If there's a selected brand, don't reset to its logo
+    if (!selectedBrand) {
+      setImagePreview(null);
+    } else {
+      setImagePreview(selectedBrand.logoUrl);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-600">Error loading brands: {error?.message}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -87,7 +214,7 @@ const BrandsPage = () => {
             setSelectedBrand(null);
             setIsModalOpen(true);
           }}
-          className="inline-flex items-center px-4 py-2 bg-white text-black border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="inline-flex items-center px-4 py-2 bg-primary-600 text-black bg-white border border-transparent rounded-md shadow-sm text-sm font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <FiPlus className="w-5 h-5 mr-2" />
           Add Brand
@@ -106,7 +233,7 @@ const BrandsPage = () => {
       </div>
 
       {/* Brands List */}
-      <div className="bg-white  shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -127,16 +254,19 @@ const BrandsPage = () => {
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white  divide-y divide-gray-200">
-            {filteredBrands.map((brand) => (
-              <tr key={brand.id}>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredBrands?.map((brand) => (
+              <tr key={brand._id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    {brand.logo && (
+                    {brand.logoUrl && (
                       <img
-                        src={brand.logo}
+                        src={brand.logoUrl}
                         alt={brand.name}
-                        className="h-10 w-10 rounded-full mr-3"
+                        className="h-10 w-10 rounded-full mr-3 object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                        }}
                       />
                     )}
                     <div className="text-sm font-medium text-gray-900">
@@ -145,34 +275,39 @@ const BrandsPage = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-500 max-w-xs truncate">
                     {brand.description}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <a
-                    href={brand.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-600 hover:text-primary-900"
-                  >
-                    {brand.website}
-                  </a>
+                  {brand.websiteUrl && (
+                    <a
+                      href={brand.websiteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-600 hover:text-primary-900 text-sm"
+                    >
+                      {brand.websiteUrl}
+                    </a>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <select
                     value={brand.status}
                     onChange={(e) =>
-                      handleStatusChange(brand.id, e.target.value)
+                      statusChangeMutation.mutate({
+                        id: brand._id,
+                        newStatus: e.target.value,
+                      })
                     }
-                    className={`text-sm rounded-full px-2 py-1 font-semibold ${
-                      brand.status === "Active"
+                    className={`text-sm rounded-full px-2 py-1 font-semibold border-0 ${
+                      brand.status === "active"
                         ? "bg-green-100 text-green-800"
                         : "bg-red-100 text-red-800"
                     }`}
                   >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
                   </select>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -186,7 +321,10 @@ const BrandsPage = () => {
                     <FiEdit2 className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => handleDelete(brand.id)}
+                    onClick={() => {
+                      setBrandToDelete(brand);
+                      setIsDeleteModalOpen(true);
+                    }}
                     className="text-red-600 hover:text-red-900"
                   >
                     <FiTrash2 className="w-5 h-5" />
@@ -229,21 +367,7 @@ const BrandsPage = () => {
 
                 {/* Content */}
                 <div className="bg-white px-6 py-4">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const formData = new FormData(e.target);
-                      handleSubmit({
-                        name: formData.get("name"),
-                        slug: formData.get("slug"),
-                        description: formData.get("description"),
-                        logo: formData.get("logo"),
-                        website: formData.get("website"),
-                        status: formData.get("status"),
-                      });
-                    }}
-                    className="space-y-4"
-                  >
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                       <label
                         htmlFor="name"
@@ -255,25 +379,8 @@ const BrandsPage = () => {
                         type="text"
                         id="name"
                         name="name"
-                        defaultValue={selectedBrand?.name}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500  sm:text-sm"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="slug"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Slug
-                      </label>
-                      <input
-                        type="text"
-                        id="slug"
-                        name="slug"
-                        defaultValue={selectedBrand?.slug}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500  sm:text-sm"
+                        defaultValue={selectedBrand?.name || ""}
+                        className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                         required
                       />
                     </div>
@@ -289,8 +396,8 @@ const BrandsPage = () => {
                         id="description"
                         name="description"
                         rows={3}
-                        defaultValue={selectedBrand?.description}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500  sm:text-sm"
+                        defaultValue={selectedBrand?.description || ""}
+                        className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                       />
                     </div>
 
@@ -299,15 +406,66 @@ const BrandsPage = () => {
                         htmlFor="logo"
                         className="block text-sm font-medium text-gray-700"
                       >
-                        Logo URL
+                        Logo
                       </label>
-                      <input
-                        type="url"
-                        id="logo"
-                        name="logo"
-                        defaultValue={selectedBrand?.logo}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500  sm:text-sm"
-                      />
+                      <div className="mt-1 flex flex-col items-center">
+                        <div className="w-full flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                          <div className="space-y-1 text-center">
+                            <svg
+                              className="mx-auto h-12 w-12 text-gray-400"
+                              stroke="currentColor"
+                              fill="none"
+                              viewBox="0 0 48 48"
+                              aria-hidden="true"
+                            >
+                              <path
+                                d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <div className="flex text-sm text-gray-600">
+                              <label
+                                htmlFor="logo-upload"
+                                className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"
+                              >
+                                <span>Upload a file</span>
+                                <input
+                                  id="logo-upload"
+                                  name="logo"
+                                  type="file"
+                                  accept="image/*"
+                                  className="sr-only"
+                                  onChange={handleFileChange}
+                                />
+                              </label>
+                              <p className="pl-1">or drag and drop</p>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              PNG, JPG, GIF up to 5MB
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Image Preview */}
+                        {imagePreview && (
+                          <div className="mt-4 relative">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="h-32 w-32 object-cover rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={clearImagePreview}
+                              className="absolute -top-2 -right-2 rounded-full bg-red-500 text-white p-1 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            >
+                              <FiX className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -321,8 +479,8 @@ const BrandsPage = () => {
                         type="url"
                         id="website"
                         name="website"
-                        defaultValue={selectedBrand?.website}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500  sm:text-sm"
+                        defaultValue={selectedBrand?.websiteUrl || ""}
+                        className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                       />
                     </div>
 
@@ -336,11 +494,11 @@ const BrandsPage = () => {
                       <select
                         id="status"
                         name="status"
-                        defaultValue={selectedBrand?.status || "Active"}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500  sm:text-sm"
+                        defaultValue={selectedBrand?.status || "active"}
+                        className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                       >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
                       </select>
                     </div>
 
@@ -354,12 +512,118 @@ const BrandsPage = () => {
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-black bg-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        disabled={isSubmitting}
+                        className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+                          isSubmitting
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-green-600 hover:bg-green-700 cursor-pointer"
+                        }`}
                       >
-                        {selectedBrand ? "Save Changes" : "Add Brand"}
+                        {isSubmitting ? (
+                          <span className="flex items-center">
+                            <svg
+                              className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
+                            </svg>
+                            {selectedBrand ? "Saving..." : "Adding..."}
+                          </span>
+                        ) : selectedBrand ? (
+                          "Save Changes"
+                        ) : (
+                          "Add Brand"
+                        )}
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && brandToDelete && (
+        <div className="fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 transition-opacity"
+            onClick={() => setIsDeleteModalOpen(false)}
+          />
+
+          {/* Modal Container */}
+          <div className="fixed inset-0 z-10 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+              <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md">
+                {/* Header */}
+                <div className="bg-white px-6 py-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <FiTrash2 className="h-6 w-6 text-red-600" />
+                      </div>
+                      <h2 className="ml-3 text-lg font-semibold text-gray-900">
+                        Delete Brand
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => setIsDeleteModalOpen(false)}
+                      className="text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <span className="sr-only">Close</span>
+                      <FiX className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="bg-white px-6 py-4">
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500">
+                      Are you sure you want to delete{" "}
+                      <span className="font-semibold text-gray-900">
+                        {brandToDelete.name}
+                      </span>
+                      ? This action cannot be undone and will permanently delete
+                      this brand from the system.
+                    </p>
+                  </div>
+
+                  <div className="mt-6 flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsDeleteModalOpen(false)}
+                      className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        deleteBrandMutation.mutate(brandToDelete._id);
+                        setIsDeleteModalOpen(false);
+                        setBrandToDelete(null);
+                      }}
+                      className="inline-flex justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      Delete Brand
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

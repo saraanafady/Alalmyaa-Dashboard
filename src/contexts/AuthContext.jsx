@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
     reducer,
     initalState
   );
-  const navigate = useNavigate();
+
   const isTokenValid = (token) => {
     try {
       const decoded = jwtDecode(token);
@@ -51,19 +51,30 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token && isTokenValid(token)) {
-      try {
-        const user = jwtDecode(token);
-        dispatch({ type: "LOGIN", payload: user });
-      } catch (err) {
-        console.error(err);
+    const initializeAuth = async () => {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+
+      if (token && isTokenValid(token)) {
+        try {
+          const user = jwtDecode(token);
+          // Add axios default header
+          axios.defaults.headers.common["Authorization"] = `${token}`;
+          dispatch({ type: "LOGIN", payload: user });
+        } catch (err) {
+          console.error(err);
+          localStorage.removeItem("token");
+          delete axios.defaults.headers.common["Authorization"];
+        }
+      } else {
         localStorage.removeItem("token");
+        delete axios.defaults.headers.common["Authorization"];
       }
-    } else {
-      localStorage.removeItem("token");
-    }
-    setCheckingAuth(false);
+      setCheckingAuth(false);
+      setLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
   const login = async (data) => {
@@ -74,21 +85,18 @@ export const AuthProvider = ({ children }) => {
       });
 
       const { token } = response.data;
-
-      if (!isTokenValid(token)) {
-        throw new Error("Invalid token received");
-      }
+      if (!isTokenValid(token)) throw new Error("Invalid token received");
 
       localStorage.setItem("token", token);
+      // Add axios default header after login
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       const user = jwtDecode(token);
 
       dispatch({ type: "LOGIN", payload: user });
-      if (user.role !== "admin") {
-        navigate("/");
-      }
-      navigate("/dashboard");
+      return { success: true, user };
     } catch (error) {
       setErrors(error.response?.data?.error.message || "Login failed");
+      return { success: false };
     } finally {
       setLoading(false);
     }
@@ -106,20 +114,24 @@ export const AuthProvider = ({ children }) => {
     } finally {
       localStorage.removeItem("token");
       dispatch({ type: "LOGOUT" });
-      navigate("/login");
     }
   };
-  const value = {
-    user,
-    loading,
-    login,
-    logout,
-    isAuthenticated,
-    errors,
-    checkingAuth,
-  };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        isAuthenticated,
+        errors,
+        checkingAuth,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
