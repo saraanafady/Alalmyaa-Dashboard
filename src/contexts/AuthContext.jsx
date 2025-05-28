@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
         try {
           const user = jwtDecode(token);
           // Add axios default header
-          axios.defaults.headers.common["Authorization"] = `${token}`;
+          axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
           dispatch({ type: "LOGIN", payload: user });
         } catch (err) {
           console.error(err);
