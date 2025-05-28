@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import OrdersPage from "../pages/orders/OrdersPage";
@@ -12,6 +12,10 @@ import SignUp from "../pages/auth/SignUp";
 import CustomerLayout from "../layouts/CustomerLayout";
 import Main from "../pages/CustomerPages/main/Main";
 const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Navigate to="/dashboard" replace />,
+  },
   {
     path: "/dashboard",
     element: (

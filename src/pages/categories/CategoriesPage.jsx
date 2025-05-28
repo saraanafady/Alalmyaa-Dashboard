@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, Fragment } from "react";
 import {
   FiEdit2,
   FiTrash2,
@@ -8,67 +8,116 @@ import {
   FiChevronRight,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
-
-// Mock data
-const initialCategories = [
-  {
-    id: 1,
-    name: "Electronics",
-    slug: "electronics",
-    description: "Electronic devices and accessories",
-    image: "https://example.com/electronics.jpg",
-    status: "Active",
-    subcategories: [
-      {
-        id: 101,
-        name: "Smartphones",
-        slug: "smartphones",
-        description: "Mobile phones and accessories",
-        status: "Active",
-      },
-      {
-        id: 102,
-        name: "Laptops",
-        slug: "laptops",
-        description: "Laptops and accessories",
-        status: "Active",
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Clothing",
-    slug: "clothing",
-    description: "Fashion and apparel",
-    image: "https://example.com/clothing.jpg",
-    status: "Active",
-    subcategories: [
-      {
-        id: 201,
-        name: "Men",
-        slug: "men",
-        description: "Men's clothing",
-        status: "Active",
-      },
-      {
-        id: 202,
-        name: "Women",
-        slug: "women",
-        description: "Women's clothing",
-        status: "Active",
-      },
-    ],
-  },
-];
+import axios from "axios";
+import { base_url } from "../../constants/axiosConfig";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 
 const CategoriesPage = () => {
-  const [categories, setCategories] = useState(initialCategories);
+  const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubcategoryModalOpen, setIsSubcategoryModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCategories, setExpandedCategories] = useState(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchCategories = async () => {
+    try {
+      const { data } = await axios.get(`${base_url}/api/categories`);
+      // Handle both response formats (with and without status wrapper)
+      return Array.isArray(data) ? data : (data.data?.categories || []);
+    } catch (error) {
+      console.error("Error fetching categories:", error.response?.data);
+      throw error;
+    }
+  };
+
+  const {
+    data: categories = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories,
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id) => axios.delete(`${base_url}/api/categories/${id}`),
+    onSuccess: () => {
+      toast.success("Category deleted successfully");
+      queryClient.invalidateQueries(["categories"]);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || "Failed to delete category");
+      console.error(err);
+    },
+  });
+
+  const statusChangeMutation = useMutation({
+    mutationFn: ({ id }) =>
+      axios.patch(`${base_url}/api/categories/${id}/toggle-status`),
+    onSuccess: () => {
+      toast.success("Status updated successfully");
+      queryClient.invalidateQueries(["categories"]);
+    },
+    onError: (err) => {
+      toast.error("Failed to update status");
+      console.error(err);
+    },
+  });
+
+  const addCategoryMutation = useMutation({
+    mutationFn: (formData) => {
+      console.log('Sending category data:', formData); // Debug log
+      return axios.post(`${base_url}/api/categories`, formData);
+    },
+    onSuccess: (response) => {
+      console.log('Category created successfully:', response.data);
+      toast.success("Category added successfully");
+      queryClient.invalidateQueries(["categories"]);
+    },
+    onError: (err) => {
+      console.error("Error creating category:", err.response?.data);
+      handleFormError(err);
+    },
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, formData }) => {
+      console.log('Updating category with ID:', id);
+      console.log('Update data:', formData);
+      if (!id) {
+        throw new Error('Category ID is required for update');
+      }
+      return axios.put(`${base_url}/api/categories/${id}`, formData);
+    },
+    onSuccess: (response) => {
+      console.log('Category updated successfully:', response.data);
+      toast.success("Category updated successfully");
+      queryClient.invalidateQueries(["categories"]);
+    },
+    onError: (err) => {
+      console.error("Error updating category:", {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: err.message
+      });
+      handleFormError(err);
+    },
+  });
+
+  const handleFormError = (err) => {
+    const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || "Failed to submit category";
+    console.error("Form error details:", {
+      message: errorMessage,
+      data: err.response?.data,
+      status: err.response?.status,
+      error: err
+    });
+    toast.error(errorMessage);
+  };
 
   const toggleCategory = (categoryId) => {
     setExpandedCategories((prev) => {
@@ -88,101 +137,85 @@ const CategoriesPage = () => {
       category.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleDelete = (id, isSubcategory = false) => {
-    if (window.confirm("Are you sure you want to delete this item?")) {
-      if (isSubcategory) {
-        setCategories(
-          categories.map((category) => ({
-            ...category,
-            subcategories: category.subcategories.filter(
-              (sub) => sub.id !== id
-            ),
-          }))
-        );
+  const handleDelete = (id) => {
+    if (window.confirm("Are you sure you want to delete this category?")) {
+      deleteCategoryMutation.mutate(id);
+    }
+  };
+
+  const handleStatusChange = (id) => {
+    statusChangeMutation.mutate({ id });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.target);
+    const data = {
+      name: formData.get("name"),
+      slug: formData.get("slug"),
+      description: formData.get("description"),
+      isActive: formData.get("status") === "Active",
+    };
+
+    console.log('Submitting category data:', data);
+
+    try {
+      if (selectedCategory) {
+        console.log('Selected category:', selectedCategory);
+        if (!selectedCategory._id) {
+          throw new Error('Invalid category ID');
+        }
+        
+        // Verify the category exists before updating
+        try {
+          const response = await axios.get(`${base_url}/api/categories/${selectedCategory._id}`);
+          console.log('Category exists:', response.data);
+          
+          // If we get here, the category exists, proceed with update
+          await updateCategoryMutation.mutateAsync({
+            id: selectedCategory._id,
+            formData: data,
+          });
+        } catch (error) {
+          console.error('Category not found:', error.response?.data);
+          throw new Error('Category not found. Please refresh the page and try again.');
+        }
       } else {
-        setCategories(categories.filter((category) => category.id !== id));
+        // Create new category
+        await addCategoryMutation.mutateAsync(data);
       }
-      toast.success(
-        `${isSubcategory ? "Subcategory" : "Category"} deleted successfully`
-      );
+      setIsModalOpen(false);
+      setSelectedCategory(null);
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      if (error.response) {
+        console.error("Error response data:", error.response.data);
+        console.error("Error response status:", error.response.status);
+        toast.error(error.response.data?.message || "Failed to submit category");
+      } else {
+        toast.error(error.message || "Failed to submit category");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleStatusChange = (id, newStatus, isSubcategory = false) => {
-    if (isSubcategory) {
-      setCategories(
-        categories.map((category) => ({
-          ...category,
-          subcategories: category.subcategories.map((sub) =>
-            sub.id === id ? { ...sub, status: newStatus } : sub
-          ),
-        }))
-      );
-    } else {
-      setCategories(
-        categories.map((category) =>
-          category.id === id ? { ...category, status: newStatus } : category
-        )
-      );
-    }
-    toast.success("Status updated successfully");
-  };
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
-  const handleSubmit = (data) => {
-    if (selectedCategory) {
-      setCategories(
-        categories.map((category) =>
-          category.id === selectedCategory.id
-            ? { ...category, ...data }
-            : category
-        )
-      );
-      toast.success("Category updated successfully");
-    } else {
-      const newCategory = {
-        id: Math.max(...categories.map((c) => c.id)) + 1,
-        ...data,
-        subcategories: [],
-      };
-      setCategories([...categories, newCategory]);
-      toast.success("Category added successfully");
-    }
-    setIsModalOpen(false);
-  };
-
-  const handleSubcategorySubmit = (data) => {
-    if (selectedSubcategory) {
-      setCategories(
-        categories.map((category) => ({
-          ...category,
-          subcategories: category.subcategories.map((sub) =>
-            sub.id === selectedSubcategory.id ? { ...sub, ...data } : sub
-          ),
-        }))
-      );
-      toast.success("Subcategory updated successfully");
-    } else {
-      const newSubcategory = {
-        id:
-          Math.max(
-            ...categories.flatMap((c) => c.subcategories).map((s) => s.id)
-          ) + 1,
-        ...data,
-      };
-      setCategories(
-        categories.map((category) =>
-          category.id === selectedCategory.id
-            ? {
-                ...category,
-                subcategories: [...category.subcategories, newSubcategory],
-              }
-            : category
-        )
-      );
-      toast.success("Subcategory added successfully");
-    }
-    setIsSubcategoryModalOpen(false);
-  };
+  if (isError) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-600">Error loading categories: {error?.message}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -232,15 +265,15 @@ const CategoriesPage = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredCategories.map((category) => (
-              <>
-                <tr key={category.id}>
+              <Fragment key={category._id}>
+                <tr>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <button
-                        onClick={() => toggleCategory(category.id)}
+                        onClick={() => toggleCategory(category._id)}
                         className="mr-2 text-gray-400 hover:text-gray-500"
                       >
-                        {expandedCategories.has(category.id) ? (
+                        {expandedCategories.has(category._id) ? (
                           <FiChevronDown className="w-5 h-5" />
                         ) : (
                           <FiChevronRight className="w-5 h-5" />
@@ -258,12 +291,10 @@ const CategoriesPage = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <select
-                      value={category.status}
-                      onChange={(e) =>
-                        handleStatusChange(category.id, e.target.value)
-                      }
+                      value={category.isActive ? "Active" : "Inactive"}
+                      onChange={() => handleStatusChange(category._id)}
                       className={`text-sm rounded-full px-2 py-1 font-semibold ${
-                        category.status === "Active"
+                        category.isActive
                           ? "bg-green-100 text-green-800"
                           : "bg-red-100 text-red-800"
                       }`}
@@ -283,26 +314,16 @@ const CategoriesPage = () => {
                       <FiEdit2 className="w-5 h-5" />
                     </button>
                     <button
-                      onClick={() => handleDelete(category.id)}
-                      className="text-red-600 hover:text-red-900 mr-4"
+                      onClick={() => handleDelete(category._id)}
+                      className="text-red-600 hover:text-red-900"
                     >
                       <FiTrash2 className="w-5 h-5" />
                     </button>
-                    <button
-                      onClick={() => {
-                        setSelectedCategory(category);
-                        setSelectedSubcategory(null);
-                        setIsSubcategoryModalOpen(true);
-                      }}
-                      className="text-primary-600 hover:text-primary-900"
-                    >
-                      <FiPlus className="w-5 h-5" />
-                    </button>
                   </td>
                 </tr>
-                {expandedCategories.has(category.id) &&
-                  category.subcategories.map((subcategory) => (
-                    <tr key={subcategory.id} className="bg-gray-50">
+                {expandedCategories.has(category._id) &&
+                  category.subcategories?.map((subcategory) => (
+                    <tr key={subcategory._id} className="bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap pl-12">
                         <div className="text-sm font-medium text-gray-900">
                           {subcategory.name}
@@ -315,16 +336,10 @@ const CategoriesPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
-                          value={subcategory.status}
-                          onChange={(e) =>
-                            handleStatusChange(
-                              subcategory.id,
-                              e.target.value,
-                              true
-                            )
-                          }
+                          value={subcategory.isActive ? "Active" : "Inactive"}
+                          onChange={() => handleStatusChange(subcategory._id)}
                           className={`text-sm rounded-full px-2 py-1 font-semibold ${
-                            subcategory.status === "Active"
+                            subcategory.isActive
                               ? "bg-green-100 text-green-800"
                               : "bg-red-100 text-red-800"
                           }`}
@@ -345,7 +360,7 @@ const CategoriesPage = () => {
                           <FiEdit2 className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => handleDelete(subcategory.id, true)}
+                          onClick={() => handleDelete(subcategory._id)}
                           className="text-red-600 hover:text-red-900"
                         >
                           <FiTrash2 className="w-5 h-5" />
@@ -353,7 +368,7 @@ const CategoriesPage = () => {
                       </td>
                     </tr>
                   ))}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -384,19 +399,7 @@ const CategoriesPage = () => {
                 </div>
 
                 <div className="bg-white px-6 py-4">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const formData = new FormData(e.target);
-                      handleSubmit({
-                        name: formData.get("name"),
-                        slug: formData.get("slug"),
-                        description: formData.get("description"),
-                        status: formData.get("status"),
-                      });
-                    }}
-                    className="space-y-4"
-                  >
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                       <label
                         htmlFor="name"
@@ -457,7 +460,7 @@ const CategoriesPage = () => {
                       <select
                         id="status"
                         name="status"
-                        defaultValue={selectedCategory?.status || "Active"}
+                        defaultValue={selectedCategory?.isActive ? "Active" : "Inactive"}
                         className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                       >
                         <option value="Active">Active</option>
@@ -475,142 +478,42 @@ const CategoriesPage = () => {
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        disabled={isSubmitting}
+                        className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+                          isSubmitting
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-primary-600 hover:bg-primary-700"
+                        }`}
                       >
-                        {selectedCategory ? "Save Changes" : "Add Category"}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Subcategory Modal */}
-      {isSubcategoryModalOpen && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className="fixed inset-0 bg-black/50 transition-opacity"
-            onClick={() => setIsSubcategoryModalOpen(false)}
-          />
-          <div className="fixed inset-0 z-10 overflow-y-auto">
-            <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-              <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl">
-                <div className="bg-white px-6 py-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      {selectedSubcategory
-                        ? "Edit Subcategory"
-                        : "Add Subcategory"}
-                    </h2>
-                    <button
-                      onClick={() => setIsSubcategoryModalOpen(false)}
-                      className="text-gray-400 hover:text-gray-500 focus:outline-none"
-                    >
-                      <FiX className="w-6 h-6" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white px-6 py-4">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const formData = new FormData(e.target);
-                      handleSubcategorySubmit({
-                        name: formData.get("name"),
-                        slug: formData.get("slug"),
-                        description: formData.get("description"),
-                        status: formData.get("status"),
-                      });
-                    }}
-                    className="space-y-4"
-                  >
-                    <div>
-                      <label
-                        htmlFor="subcategory-name"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        id="subcategory-name"
-                        name="name"
-                        defaultValue={selectedSubcategory?.name}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="subcategory-slug"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Slug
-                      </label>
-                      <input
-                        type="text"
-                        id="subcategory-slug"
-                        name="slug"
-                        defaultValue={selectedSubcategory?.slug}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="subcategory-description"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="subcategory-description"
-                        name="description"
-                        rows={3}
-                        defaultValue={selectedSubcategory?.description}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="subcategory-status"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Status
-                      </label>
-                      <select
-                        id="subcategory-status"
-                        name="status"
-                        defaultValue={selectedSubcategory?.status || "Active"}
-                        className="mt-1 p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-
-                    <div className="flex justify-end space-x-3 pt-4">
-                      <button
-                        type="button"
-                        onClick={() => setIsSubcategoryModalOpen(false)}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      >
-                        {selectedSubcategory
-                          ? "Save Changes"
-                          : "Add Subcategory"}
+                        {isSubmitting ? (
+                          <span className="flex items-center">
+                            <svg
+                              className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              ></circle>
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                              ></path>
+                            </svg>
+                            {selectedCategory ? "Saving..." : "Adding..."}
+                          </span>
+                        ) : selectedCategory ? (
+                          "Save Changes"
+                        ) : (
+                          "Add Category"
+                        )}
                       </button>
                     </div>
                   </form>
