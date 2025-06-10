@@ -18,6 +18,7 @@ import { useAuth } from "../contexts/AuthContext";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: FiHome },
   { name: "Orders", href: "/dashboard/orders", icon: FiShoppingCart },
+  {name: "cart" , href: "/dashboard/cart" , icon: FiShoppingCart },
   { name: "Products", href: "/dashboard/products", icon: FiPackage },
   { name: "Categories", href: "/dashboard/categories", icon: FiGrid },
   { name: "Brands", href: "/dashboard/brands", icon: FiTag },

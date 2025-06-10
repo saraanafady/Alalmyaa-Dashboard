@@ -8,6 +8,7 @@ import CategoriesPage from "../pages/categories/CategoriesPage";
 import BrandsPage from "../pages/brands/BrandsPage";
 import LoginPage from "../pages/auth/Login";
 import ProtectedRoute from "../components/ProtectedRoute";
+import CartPage from "../pages/cart/cart";
 
 const router = createBrowserRouter([
   {
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "orders", element: <OrdersPage /> },
+      { path: "cart", element: <CartPage /> },
       { path: "products", element: <ProductsPage /> },
       { path: "customers", element: <CustomersPage /> },
       { path: "categories", element: <CategoriesPage /> },
