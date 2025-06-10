@@ -11,6 +11,7 @@ import {
   FiSettings,
   FiTag,
   FiGrid,
+  FiLogOut,
 } from "react-icons/fi";
 import Button from "../components/Button";
 import { useAuth } from "../contexts/AuthContext";
@@ -149,8 +150,9 @@ const DashboardLayout = () => {
                 </p>
                 <button
                   onClick={logout}
-                  className="text-xs text-gray-500 hover:text-gray-700"
+                  className="text-xs text-red-500 hover:text-red-700 font-bold cursor-pointer flex items-center gap-2"
                 >
+                  <FiLogOut />
                   Sign out
                 </button>
               </div>
