@@ -9,6 +9,7 @@ import Badge from "../../components/Badge";
 import { FiEdit2, FiTrash2, FiPlus } from "react-icons/fi";
 import ProductForm from "./ProductForm";
 import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
 // Mock data
 const initialProducts = [
@@ -40,6 +41,7 @@ const ProductsPage = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const navigate = useNavigate();
 
   const filteredProducts = products.filter(
     (product) =>
@@ -120,7 +122,13 @@ const ProductsPage = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold text-gray-900">Products</h1>
-        <Button onClick={handleAddProduct}>Add Product</Button>
+        <Button
+          onClick={() => {
+            navigate("create");
+          }}
+        >
+          Add Product
+        </Button>
       </div>
 
       {/* Search and Filters */}

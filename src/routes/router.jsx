@@ -11,6 +11,7 @@ import ProtectedRoute from "../components/ProtectedRoute";
 import SignUp from "../pages/auth/SignUp";
 import CustomerLayout from "../layouts/CustomerLayout";
 import Main from "../pages/CustomerPages/main/Main";
+import CreateProduct from "../pages/createProduct/CreateProduct";
 const router = createBrowserRouter([
   {
     path: "/",
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: "orders", element: <OrdersPage /> },
       { path: "products", element: <ProductsPage /> },
+      { path: "products/create", element: <CreateProduct /> },
       { path: "customers", element: <CustomersPage /> },
       { path: "categories", element: <CategoriesPage /> },
       { path: "brands", element: <BrandsPage /> },
