@@ -54,7 +54,7 @@ const CategoriesPage = () => {
       console.log('Raw API response:', data);
       
       // Transform and normalize the data
-      const transformedData = Array.isArray(data) ? data : data.data?.categories || [];
+      const transformedData = Array.isArray(data.data) ? data.data : [];
       
       // Process categories first
       const processedCategories = await Promise.all(transformedData

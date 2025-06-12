@@ -14,6 +14,7 @@ import CustomerLayout from "../layouts/CustomerLayout";
 import Main from "../pages/CustomerPages/main/Main";
 import CreateProduct from "../pages/createProduct/CreateProduct";
 import EditProductPage from "../pages/products/EditProductPage";
+import CartPage from "../pages/cart/cart";
 
 const router = createBrowserRouter([
   {
