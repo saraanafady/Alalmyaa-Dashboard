@@ -9,8 +9,45 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { base_url } from "../../constants/axiosConfig";
+import { useTranslation } from "react-i18next";
 
 const ProductPreview = ({ product, onClose }) => {
+  const { i18n } = useTranslation();
+  
+  // Helper function to get localized text from multilingual objects
+  const getLocalizedText = (textObj, fallback = '') => {
+    const currentLanguage = i18n.language;
+    
+    if (!textObj) {
+      return fallback;
+    }
+    
+    // Handle simple string values (backward compatibility)
+    if (typeof textObj === 'string' && textObj.trim()) {
+      return textObj.trim();
+    }
+    
+    // Handle multilingual object structure {en: "...", ar: "..."}
+    if (typeof textObj === 'object' && textObj !== null && !Array.isArray(textObj)) {
+      // Try current language first
+      if (textObj[currentLanguage] && typeof textObj[currentLanguage] === 'string' && textObj[currentLanguage].trim()) {
+        return textObj[currentLanguage].trim();
+      }
+      
+      // Fallback to English if current language is not available
+      if (textObj.en && typeof textObj.en === 'string' && textObj.en.trim()) {
+        return textObj.en.trim();
+      }
+      
+      // Fallback to Arabic if English is not available
+      if (textObj.ar && typeof textObj.ar === 'string' && textObj.ar.trim()) {
+        return textObj.ar.trim();
+      }
+    }
+    
+    return fallback;
+  };
+
   if (!product) return null;
 
   return (
@@ -20,12 +57,12 @@ const ProductPreview = ({ product, onClose }) => {
         <div className="w-1/3">
           <img
             src={product.coverImage}
-            alt={product.name}
+            alt={getLocalizedText(product.name, "Product Image")}
             className="w-full h-64 object-cover rounded-lg shadow-lg"
           />
         </div>
         <div className="w-2/3 space-y-4">
-          <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{getLocalizedText(product.name, "Unnamed Product")}</h2>
           <div className="flex items-center gap-2">
             <Badge variant={product.totalStock > 0 ? "success" : "error"}>
               {product.totalStock > 0 ? "In Stock" : "Out of Stock"}
@@ -37,17 +74,17 @@ const ProductPreview = ({ product, onClose }) => {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-gray-600">Category:</span>
-            <span className="font-medium">{product.category.name}</span>
+            <span className="font-medium">{product.category ? getLocalizedText(product.category.name, "No Category") : "No Category"}</span>
             {product.subCategory && (
               <>
                 <span className="text-gray-500">•</span>
-                <span className="font-medium">{product.subCategory.name}</span>
+                <span className="font-medium">{getLocalizedText(product.subCategory.name, "No Subcategory")}</span>
               </>
             )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-gray-600">Brand:</span>
-            <span className="font-medium">{product.brand.name}</span>
+            <span className="font-medium">{product.brand ? getLocalizedText(product.brand.name, "No Brand") : "No Brand"}</span>
           </div>
         </div>
       </div>
@@ -72,22 +109,25 @@ const ProductPreview = ({ product, onClose }) => {
       </div>
 
       {/* Variants */}
+      {product.variants && product.variants.length > 0 && (
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Product Variants</h3>
         {product.variants.map((variant, index) => (
           <div key={index} className="border rounded-lg p-4">
             <div className="flex items-center gap-4 mb-4">
               <div className="w-16 h-16">
-                <img
-                  src={variant.images[0]}
-                  alt={variant.color}
-                  className="w-full h-full object-cover rounded"
-                />
+                {variant.images && variant.images.length > 0 && (
+                  <img
+                    src={variant.images[0]}
+                    alt={variant.color}
+                    className="w-full h-full object-cover rounded"
+                  />
+                )}
               </div>
               <div>
                 <h4 className="font-medium">Color: {variant.color}</h4>
                 <div className="flex gap-2 mt-1">
-                  {variant.images.map((image, imgIndex) => (
+                  {variant.images && variant.images.map((image, imgIndex) => (
                     <img
                       key={imgIndex}
                       src={image}
@@ -99,7 +139,7 @@ const ProductPreview = ({ product, onClose }) => {
               </div>
             </div>
             <div className="space-y-2">
-              {variant.storageOptions.map((option, optIndex) => (
+              {variant.storageOptions && variant.storageOptions.map((option, optIndex) => (
                 <div
                   key={optIndex}
                   className="flex items-center justify-between bg-gray-50 p-2 rounded"
@@ -129,6 +169,7 @@ const ProductPreview = ({ product, onClose }) => {
           </div>
         ))}
       </div>
+      )}
 
       {/* Specifications */}
       {Object.keys(product.specifications).length > 0 && (
@@ -148,7 +189,7 @@ const ProductPreview = ({ product, onClose }) => {
       {/* Description */}
       <div className="space-y-2">
         <h3 className="text-lg font-semibold">Description</h3>
-        <p className="text-gray-600">{product.description}</p>
+        <p className="text-gray-600">{getLocalizedText(product.description, "No description available")}</p>
       </div>
 
       {/* Additional Info */}
@@ -165,6 +206,41 @@ const ProductsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { i18n } = useTranslation();
+
+  // Helper function to get localized text from multilingual objects
+  const getLocalizedText = (textObj, fallback = '') => {
+    const currentLanguage = i18n.language;
+    
+    if (!textObj) {
+      return fallback;
+    }
+    
+    // Handle simple string values (backward compatibility)
+    if (typeof textObj === 'string' && textObj.trim()) {
+      return textObj.trim();
+    }
+    
+    // Handle multilingual object structure {en: "...", ar: "..."}
+    if (typeof textObj === 'object' && textObj !== null && !Array.isArray(textObj)) {
+      // Try current language first
+      if (textObj[currentLanguage] && typeof textObj[currentLanguage] === 'string' && textObj[currentLanguage].trim()) {
+        return textObj[currentLanguage].trim();
+      }
+      
+      // Fallback to English if current language is not available
+      if (textObj.en && typeof textObj.en === 'string' && textObj.en.trim()) {
+        return textObj.en.trim();
+      }
+      
+      // Fallback to Arabic if English is not available
+      if (textObj.ar && typeof textObj.ar === 'string' && textObj.ar.trim()) {
+        return textObj.ar.trim();
+      }
+    }
+    
+    return fallback;
+  };
 
   const fetchProducts = async () => {
     const response = await axios.get(`${base_url}/api/product`);
@@ -195,8 +271,8 @@ const ProductsPage = () => {
 
   const filteredProducts = products.filter(
     (product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.name.toLowerCase().includes(searchTerm.toLowerCase())
+      getLocalizedText(product.name, '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (product.category && getLocalizedText(product.category.name, '').toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleDelete = (id) => {
@@ -230,32 +306,36 @@ const ProductsPage = () => {
         <div className="flex items-center space-x-3">
           <img
             src={row.coverImage}
-            alt={row.name}
+            alt={getLocalizedText(row.name, "Product Image")}
             className="w-10 h-10 object-cover rounded"
           />
-          <span className="truncate max-w-xs">{row.name}</span>
+          <span className="truncate max-w-xs">{getLocalizedText(row.name, "Unnamed Product")}</span>
         </div>
       ),
     },
     {
       key: "category",
       title: "Category",
-      render: (row) => row.category.name,
+      render: (row) => row.category ? getLocalizedText(row.category.name, "No Category") : "No Category",
     },
     {
       key: "price",
       title: "Price",
       render: (row) => {
-        const minPrice = Math.min(
-          ...row.variants.flatMap((v) =>
-            v.storageOptions.map((o) => o.priceAfterDiscount)
-          )
-        );
-        const maxPrice = Math.max(
-          ...row.variants.flatMap((v) =>
-            v.storageOptions.map((o) => o.priceAfterDiscount)
-          )
-        );
+        if (!row.variants || row.variants.length === 0) {
+          return "N/A";
+        }
+        
+        const prices = row.variants.flatMap((v) =>
+          v.storageOptions ? v.storageOptions.map((o) => o.priceAfterDiscount) : []
+        ).filter(price => price !== undefined && price !== null);
+        
+        if (prices.length === 0) {
+          return "N/A";
+        }
+        
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
         return minPrice === maxPrice
           ? `$${minPrice.toFixed(2)}`
           : `$${minPrice.toFixed(2)}`;
