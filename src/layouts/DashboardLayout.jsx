@@ -13,15 +13,17 @@ import {
   FiGrid,
   FiLogOut,
 } from "react-icons/fi";
+import { PiShoppingBag } from "react-icons/pi";
 import Button from "../components/Button";
 import { useAuth } from "../contexts/AuthContext";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: FiHome },
-  { name: "Orders", href: "/dashboard/orders", icon: FiShoppingCart },
-  { name: "Products", href: "/dashboard/products", icon: FiPackage },
   { name: "Categories", href: "/dashboard/categories", icon: FiGrid },
   { name: "Brands", href: "/dashboard/brands", icon: FiTag },
+  { name: "Products", href: "/dashboard/products", icon: FiPackage },
+  { name: "Orders", href: "/dashboard/orders", icon: PiShoppingBag },
+  { name: "Cart", href: "/dashboard/cart", icon: FiShoppingCart },
   { name: "Customers", href: "/dashboard/customers", icon: FiUsers },
 ];
 

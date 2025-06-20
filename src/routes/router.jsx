@@ -14,6 +14,8 @@ import CustomerLayout from "../layouts/CustomerLayout";
 import Main from "../pages/CustomerPages/main/Main";
 import CreateProduct from "../pages/createProduct/CreateProduct";
 import EditProductPage from "../pages/products/EditProductPage";
+import CartPage from "../pages/cart/cart";
+import ProductCreationForm from "../pages/createProduct/CreateProductV2";
 
 const router = createBrowserRouter([
   {
@@ -30,8 +32,10 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "orders", element: <OrdersPage /> },
+      { path: "cart", element: <CartPage /> },
       { path: "products", element: <ProductsPage /> },
-      { path: "products/create", element: <CreateProduct /> },
+      // { path: "products/create", element: <CreateProduct /> },
+      { path: "products/create", element: <ProductCreationForm /> },
       { path: "products/preview/:id", element: <ProductPreviewPage /> },
       { path: "products/edit/:id", element: <EditProductPage /> },
       { path: "customers", element: <CustomersPage /> },
