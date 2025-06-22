@@ -19,6 +19,20 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 
+const getLocalizedText = (obj, lang, fallback = "") => {
+  if (!obj) return fallback;
+  if (typeof obj === "string") return obj;
+  if (typeof obj === "object" && obj !== null) {
+    if (obj[lang] && typeof obj[lang] === "string" && obj[lang].trim())
+      return obj[lang].trim();
+    if (obj.en && typeof obj.en === "string" && obj.en.trim())
+      return obj.en.trim();
+    if (obj.ar && typeof obj.ar === "string" && obj.ar.trim())
+      return obj.ar.trim();
+  }
+  return fallback;
+};
+
 // Form validation schema
 const productSchema = yup.object().shape({
   name: yup.object().shape({
@@ -43,12 +57,10 @@ const productSchema = yup.object().shape({
         en: yup.string().required("English name is required"),
         ar: yup.string().required("Arabic name is required"),
       }),
-      value: yup.string().required("Value is required"),
-      unit: yup.object().shape({
-        en: yup.string().notRequired(),
-        ar: yup.string().notRequired(),
+      value: yup.object().shape({
+        en: yup.string().required("English value is required"),
+        ar: yup.string().required("Arabic value is required"),
       }),
-      isFilterable: yup.boolean(),
     })
   ),
   variants: yup.array().of(
@@ -103,6 +115,17 @@ export default function EditProductPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [lang, setLang] = useState(localStorage.getItem("language") || "en");
+
+  useEffect(() => {
+    const handleLanguageChange = () => {
+      setLang(localStorage.getItem("language") || "en");
+    };
+    window.addEventListener("languageChanged", handleLanguageChange);
+    return () => {
+      window.removeEventListener("languageChanged", handleLanguageChange);
+    };
+  }, []);
 
   const {
     register,
@@ -373,18 +396,13 @@ export default function EditProductPage() {
           `specifications[${index}][name][ar]`,
           spec.name.ar
         );
-        productFormData.append(`specifications[${index}][value]`, spec.value);
         productFormData.append(
-          `specifications[${index}][unit][en]`,
-          spec.unit.en || ""
+          `specifications[${index}][value][en]`,
+          spec.value.en
         );
         productFormData.append(
-          `specifications[${index}][unit][ar]`,
-          spec.unit.ar || ""
-        );
-        productFormData.append(
-          `specifications[${index}][isFilterable]`,
-          spec.isFilterable
+          `specifications[${index}][value][ar]`,
+          spec.value.ar
         );
       });
 
@@ -515,7 +533,12 @@ export default function EditProductPage() {
             className="group inline-flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors mb-6"
           >
             <MoveLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="font-medium">Back To Products</span>
+            <span className="font-medium">
+              {getLocalizedText(
+                { en: "Back To Products", ar: "العودة إلى المنتجات" },
+                lang
+              )}
+            </span>
           </button>
           <div className="rounded-2xl px-8">
             <div className="flex items-center gap-4 mb-4">
@@ -524,22 +547,40 @@ export default function EditProductPage() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                  Edit Product
+                  {getLocalizedText(
+                    { en: "Edit Product", ar: "تعديل المنتج" },
+                    lang
+                  )}
                 </h1>
                 <p className="text-slate-600 mt-1">
-                  Update and configure your product listing
+                  {getLocalizedText(
+                    {
+                      en: "Update and configure your product listing",
+                      ar: "تحديث وتكوين قائمة المنتجات الخاصة بك",
+                    },
+                    lang
+                  )}
                 </p>
               </div>
             </div>
             <div className="flex gap-2 mt-6">
               <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                Product Details
+                {getLocalizedText(
+                  { en: "Product Details", ar: "تفاصيل المنتج" },
+                  lang
+                )}
               </div>
               <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                Inventory Management
+                {getLocalizedText(
+                  { en: "Inventory Management", ar: "إدارة المخزون" },
+                  lang
+                )}
               </div>
               <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-                Rich Media
+                {getLocalizedText(
+                  { en: "Rich Media", ar: "الوسائط الغنية" },
+                  lang
+                )}
               </div>
             </div>
           </div>
@@ -547,17 +588,35 @@ export default function EditProductPage() {
 
         {saveStatus === "success" && (
           <div className="mb-4 p-2 bg-green-100 text-green-700 rounded">
-            Product updated successfully!
+            {getLocalizedText(
+              {
+                en: "Product updated successfully!",
+                ar: "تم تحديث المنتج بنجاح!",
+              },
+              lang
+            )}
           </div>
         )}
         {saveStatus === "error" && (
           <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
-            Failed to update product. Please check your data.
+            {getLocalizedText(
+              {
+                en: "Failed to update product. Please check your data.",
+                ar: "فشل تحديث المنتج. يرجى التحقق من بياناتك.",
+              },
+              lang
+            )}
           </div>
         )}
         {Object.keys(errors).length > 0 && (
           <div className="mb-4 p-2 bg-red-100 text-red-700 rounded">
-            Please fill all required fields correctly.
+            {getLocalizedText(
+              {
+                en: "Please fill all required fields correctly.",
+                ar: "يرجى ملء جميع الحقول المطلوبة بشكل صحيح.",
+              },
+              lang
+            )}
           </div>
         )}
 
@@ -568,10 +627,21 @@ export default function EditProductPage() {
               <div className="flex items-center gap-3">
                 <Package className="w-6 h-6 text-black" />
                 <h2 className="text-2xl font-bold text-black">
-                  Basic Information
+                  {getLocalizedText(
+                    { en: "Basic Information", ar: "المعلومات الأساسية" },
+                    lang
+                  )}
                 </h2>
               </div>
-              <p className="text-gray-400 mt-1">Essential product details</p>
+              <p className="text-gray-400 mt-1">
+                {getLocalizedText(
+                  {
+                    en: "Essential product details",
+                    ar: "تفاصيل المنتج الأساسية",
+                  },
+                  lang
+                )}
+              </p>
             </div>
 
             <div className="p-8">
@@ -580,12 +650,21 @@ export default function EditProductPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" />
-                    English Name *
+                    {getLocalizedText(
+                      { en: "English Name *", ar: "الاسم باللغة الإنجليزية *" },
+                      lang
+                    )}
                   </label>
                   <input
                     type="text"
                     {...register("name.en")}
-                    placeholder="English product name"
+                    placeholder={getLocalizedText(
+                      {
+                        en: "English product name",
+                        ar: "اسم المنتج باللغة الإنجليزية",
+                      },
+                      lang
+                    )}
                     className={`w-full px-4 py-3 border-2 ${
                       errors.name?.en ? "border-red-500" : "border-slate-200"
                     } rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200 bg-white/80`}
@@ -602,12 +681,21 @@ export default function EditProductPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                     <Sparkles className="w-4 h-4" />
-                    Arabic Name *
+                    {getLocalizedText(
+                      { en: "Arabic Name *", ar: "الاسم باللغة العربية *" },
+                      lang
+                    )}
                   </label>
                   <input
                     type="text"
                     {...register("name.ar")}
-                    placeholder="Arabic product name"
+                    placeholder={getLocalizedText(
+                      {
+                        en: "Arabic product name",
+                        ar: "اسم المنتج باللغة العربية",
+                      },
+                      lang
+                    )}
                     className={`w-full px-4 py-3 border-2 ${
                       errors.name?.ar ? "border-red-500" : "border-slate-200"
                     } rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200 bg-white/80`}
@@ -623,11 +711,23 @@ export default function EditProductPage() {
                 {/* English Short Description */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">
-                    English Short Description *
+                    {getLocalizedText(
+                      {
+                        en: "English Short Description *",
+                        ar: "وصف قصير باللغة الإنجليزية *",
+                      },
+                      lang
+                    )}
                   </label>
                   <textarea
                     {...register("shortDescription.en")}
-                    placeholder="English short description..."
+                    placeholder={getLocalizedText(
+                      {
+                        en: "English short description...",
+                        ar: "وصف قصير باللغة الإنجليزية...",
+                      },
+                      lang
+                    )}
                     rows={2}
                     className={`w-full px-4 py-3 border-2 ${
                       errors.shortDescription?.en
@@ -645,11 +745,23 @@ export default function EditProductPage() {
                 {/* Arabic Short Description */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">
-                    Arabic Short Description *
+                    {getLocalizedText(
+                      {
+                        en: "Arabic Short Description *",
+                        ar: "وصف قصير باللغة العربية *",
+                      },
+                      lang
+                    )}
                   </label>
                   <textarea
                     {...register("shortDescription.ar")}
-                    placeholder="Arabic short description..."
+                    placeholder={getLocalizedText(
+                      {
+                        en: "Arabic short description...",
+                        ar: "وصف قصير باللغة العربية...",
+                      },
+                      lang
+                    )}
                     rows={2}
                     className={`w-full px-4 py-3 border-2 ${
                       errors.shortDescription?.ar
@@ -667,11 +779,23 @@ export default function EditProductPage() {
                 {/* English Details */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">
-                    English Details *
+                    {getLocalizedText(
+                      {
+                        en: "English Details *",
+                        ar: "تفاصيل المنتج باللغة الإنجليزية *",
+                      },
+                      lang
+                    )}
                   </label>
                   <textarea
                     {...register("details.en")}
-                    placeholder="English product details..."
+                    placeholder={getLocalizedText(
+                      {
+                        en: "English product details...",
+                        ar: "تفاصيل المنتج باللغة الإنجليزية...",
+                      },
+                      lang
+                    )}
                     rows={4}
                     className={`w-full px-4 py-3 border-2 ${
                       errors.details?.en ? "border-red-500" : "border-slate-200"
@@ -687,11 +811,23 @@ export default function EditProductPage() {
                 {/* Arabic Details */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">
-                    Arabic Details *
+                    {getLocalizedText(
+                      {
+                        en: "Arabic Details *",
+                        ar: "تفاصيل المنتج باللغة العربية *",
+                      },
+                      lang
+                    )}
                   </label>
                   <textarea
                     {...register("details.ar")}
-                    placeholder="Arabic product details..."
+                    placeholder={getLocalizedText(
+                      {
+                        en: "Arabic product details...",
+                        ar: "تفاصيل المنتج باللغة العربية...",
+                      },
+                      lang
+                    )}
                     rows={4}
                     className={`w-full px-4 py-3 border-2 ${
                       errors.details?.ar ? "border-red-500" : "border-slate-200"
@@ -710,7 +846,10 @@ export default function EditProductPage() {
                   {/* Category Select */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">
-                      Category *
+                      {getLocalizedText(
+                        { en: "Category *", ar: "الفئة *" },
+                        lang
+                      )}
                     </label>
                     <select
                       {...register("category")}
@@ -719,11 +858,19 @@ export default function EditProductPage() {
                         errors.category ? "border-red-500" : "border-slate-200"
                       } rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 transition-all duration-200 bg-white/80 disabled:bg-slate-100 disabled:cursor-not-allowed`}
                     >
-                      <option value="">Select main category</option>
+                      <option value="">
+                        {getLocalizedText(
+                          {
+                            en: "Select main category",
+                            ar: "اختر الفئة الرئيسية",
+                          },
+                          lang
+                        )}
+                      </option>
                       {!categoriesLoading &&
                         categories?.map((category) => (
                           <option key={category._id} value={category._id}>
-                            {category.name?.en || category.name}
+                            {getLocalizedText(category.name, lang)}
                           </option>
                         ))}
                     </select>
@@ -737,7 +884,10 @@ export default function EditProductPage() {
                   {/* Subcategory Select */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">
-                      Subcategory
+                      {getLocalizedText(
+                        { en: "Subcategory", ar: "الفئة الفرعية" },
+                        lang
+                      )}
                     </label>
                     <select
                       {...register("subCategory")}
@@ -748,11 +898,19 @@ export default function EditProductPage() {
                           : "border-slate-200"
                       } rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 transition-all duration-200 bg-white/80 disabled:bg-slate-100 disabled:cursor-not-allowed`}
                     >
-                      <option value="">Select subcategory</option>
+                      <option value="">
+                        {getLocalizedText(
+                          {
+                            en: "Select subcategory",
+                            ar: "اختر الفئة الفرعية",
+                          },
+                          lang
+                        )}
+                      </option>
                       {!categoriesLoading &&
                         currentCategory?.subcategories?.map((subcategory) => (
                           <option key={subcategory._id} value={subcategory._id}>
-                            {subcategory.name?.en || subcategory.name}
+                            {getLocalizedText(subcategory.name, lang)}
                           </option>
                         ))}
                     </select>
@@ -766,7 +924,10 @@ export default function EditProductPage() {
                   {/* Sub-subcategory Select */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">
-                      Sub-subcategory
+                      {getLocalizedText(
+                        { en: "Sub-subcategory", ar: "الفئة الفرعية الفرعية" },
+                        lang
+                      )}
                     </label>
                     <select
                       {...register("subSubcategory")}
@@ -777,7 +938,15 @@ export default function EditProductPage() {
                           : "border-slate-200"
                       } rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 transition-all duration-200 bg-white/80 disabled:bg-slate-100 disabled:cursor-not-allowed`}
                     >
-                      <option value="">Select sub-subcategory</option>
+                      <option value="">
+                        {getLocalizedText(
+                          {
+                            en: "Select sub-subcategory",
+                            ar: "اختر الفئة الفرعية الفرعية",
+                          },
+                          lang
+                        )}
+                      </option>
                       {!categoriesLoading &&
                         currentSubcategory?.subSubcategories?.map(
                           (subSubcategory) => (
@@ -785,7 +954,7 @@ export default function EditProductPage() {
                               key={subSubcategory._id}
                               value={subSubcategory._id}
                             >
-                              {subSubcategory.name?.en || subSubcategory.name}
+                              {getLocalizedText(subSubcategory.name, lang)}
                             </option>
                           )
                         )}
@@ -800,7 +969,10 @@ export default function EditProductPage() {
                   {/* Brand Select */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">
-                      Brand *
+                      {getLocalizedText(
+                        { en: "Brand *", ar: "العلامة التجارية *" },
+                        lang
+                      )}
                     </label>
                     <select
                       {...register("brand")}
@@ -809,7 +981,12 @@ export default function EditProductPage() {
                         errors.brand ? "border-red-500" : "border-slate-200"
                       } rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 transition-all duration-200 bg-white/80 disabled:bg-slate-100 disabled:cursor-not-allowed`}
                     >
-                      <option value="">Select brand</option>
+                      <option value="">
+                        {getLocalizedText(
+                          { en: "Select brand", ar: "اختر العلامة التجارية" },
+                          lang
+                        )}
+                      </option>
                       {!brandsLoading &&
                         brands?.map((brand) => (
                           <option key={brand._id} value={brand._id}>
@@ -830,7 +1007,10 @@ export default function EditProductPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 mt-6">
                   <div className="space-y-3">
                     <label className="text-sm font-semibold text-slate-700">
-                      Cover Image
+                      {getLocalizedText(
+                        { en: "Cover Image", ar: "صورة الغلاف" },
+                        lang
+                      )}
                     </label>
                     <div className="relative group">
                       <input
@@ -852,7 +1032,10 @@ export default function EditProductPage() {
                                   ? URL.createObjectURL(coverImage)
                                   : coverImage
                               }
-                              alt="Cover preview"
+                              alt={getLocalizedText(
+                                { en: "Cover preview", ar: "معاينة الغلاف" },
+                                lang
+                              )}
                               className="w-full h-32 object-contain rounded-xl mb-4"
                             />
                             <button
@@ -872,10 +1055,22 @@ export default function EditProductPage() {
                               <Upload className="w-8 h-8 text-violet-600" />
                             </div>
                             <p className="font-medium text-slate-700 mb-1">
-                              Upload Cover Image
+                              {getLocalizedText(
+                                {
+                                  en: "Upload Cover Image",
+                                  ar: "تحميل صورة الغلاف",
+                                },
+                                lang
+                              )}
                             </p>
                             <p className="text-sm text-slate-500">
-                              PNG, JPG, WEBP up to 10MB
+                              {getLocalizedText(
+                                {
+                                  en: "PNG, JPG, WEBP up to 10MB",
+                                  ar: "PNG, JPG, WEBP حتى 10 ميجا بايت",
+                                },
+                                lang
+                              )}
                             </p>
                           </>
                         )}
@@ -894,9 +1089,20 @@ export default function EditProductPage() {
                 <div className="flex items-center gap-3">
                   <Package className="w-6 h-6" />
                   <div>
-                    <h2 className="text-2xl font-bold">Product Variants</h2>
+                    <h2 className="text-2xl font-bold">
+                      {getLocalizedText(
+                        { en: "Product Variants", ar: "متغيرات المنتج" },
+                        lang
+                      )}
+                    </h2>
                     <p className="text-gray-400 mt-1">
-                      Add different variations of your product
+                      {getLocalizedText(
+                        {
+                          en: "Add different variations of your product",
+                          ar: "أضف متغيرات مختلفة لمنتجك",
+                        },
+                        lang
+                      )}
                     </p>
                   </div>
                 </div>
@@ -924,7 +1130,10 @@ export default function EditProductPage() {
                   className="px-4 py-2 bg-white/20 hover:bg-white/30 cursor-pointer border border-gray-200 rounded-xl font-semibold transition-colors flex items-center gap-2 backdrop-blur-sm"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Variant
+                  {getLocalizedText(
+                    { en: "Add Variant", ar: "إضافة متغير" },
+                    lang
+                  )}
                 </button>
               </div>
             </div>
@@ -938,7 +1147,11 @@ export default function EditProductPage() {
                   >
                     <div className="flex justify-between items-center">
                       <h3 className="text-lg font-semibold">
-                        Variant Group {variantIndex + 1}
+                        {getLocalizedText(
+                          { en: "Variant Group", ar: "مجموعة المتغيرات" },
+                          lang
+                        )}{" "}
+                        {variantIndex + 1}
                       </h3>
                       {variantFields.length > 1 && (
                         <button
@@ -955,12 +1168,24 @@ export default function EditProductPage() {
                       {/* Variant Name (English) */}
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">
-                          Variant Group Name (English) *
+                          {getLocalizedText(
+                            {
+                              en: "Variant Group Name (English) *",
+                              ar: "اسم مجموعة المتغيرات (الإنجليزية) *",
+                            },
+                            lang
+                          )}
                         </label>
                         <input
                           type="text"
                           {...register(`variants.${variantIndex}.name.en`)}
-                          placeholder="English variant group name"
+                          placeholder={getLocalizedText(
+                            {
+                              en: "English variant group name",
+                              ar: "اسم مجموعة المتغيرات باللغة الإنجليزية",
+                            },
+                            lang
+                          )}
                           className={`w-full px-4 py-3 border-2 ${
                             errors.variants?.[variantIndex]?.name?.en
                               ? "border-red-500"
@@ -978,12 +1203,24 @@ export default function EditProductPage() {
                       {/* Variant Name (Arabic) */}
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">
-                          Variant Group Name (Arabic) *
+                          {getLocalizedText(
+                            {
+                              en: "Variant Group Name (Arabic) *",
+                              ar: "اسم مجموعة المتغيرات (العربية) *",
+                            },
+                            lang
+                          )}
                         </label>
                         <input
                           type="text"
                           {...register(`variants.${variantIndex}.name.ar`)}
-                          placeholder="Arabic variant group name"
+                          placeholder={getLocalizedText(
+                            {
+                              en: "Arabic variant group name",
+                              ar: "اسم مجموعة المتغيرات باللغة العربية",
+                            },
+                            lang
+                          )}
                           className={`w-full px-4 py-3 border-2 ${
                             errors.variants?.[variantIndex]?.name?.ar
                               ? "border-red-500"
@@ -1001,7 +1238,10 @@ export default function EditProductPage() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-semibold text-slate-700">
-                            Variant Options
+                            {getLocalizedText(
+                              { en: "Variant Options", ar: "خيارات المتغيرات" },
+                              lang
+                            )}
                           </h4>
                           <button
                             type="button"
@@ -1009,7 +1249,10 @@ export default function EditProductPage() {
                             className="px-3 py-1.5 text-sm bg-white/20 hover:bg-white/30 cursor-pointer border border-gray-200 rounded-lg font-medium transition-colors flex items-center gap-2 backdrop-blur-sm"
                           >
                             <Plus className="w-4 h-4" />
-                            Add Option
+                            {getLocalizedText(
+                              { en: "Add Option", ar: "إضافة خيار" },
+                              lang
+                            )}
                           </button>
                         </div>
 
@@ -1023,7 +1266,11 @@ export default function EditProductPage() {
                             >
                               <div className="flex items-center justify-between">
                                 <h5 className="text-lg font-medium text-slate-700">
-                                  Option {optionIndex + 1}
+                                  {getLocalizedText(
+                                    { en: "Option", ar: "الخيار" },
+                                    lang
+                                  )}{" "}
+                                  {optionIndex + 1}
                                 </h5>
                                 <button
                                   type="button"
@@ -1045,14 +1292,26 @@ export default function EditProductPage() {
                                     {/* English Value */}
                                     <div className="space-y-2">
                                       <label className="text-sm font-semibold text-slate-700">
-                                        English Value *
+                                        {getLocalizedText(
+                                          {
+                                            en: "English Value *",
+                                            ar: "القيمة باللغة الإنجليزية *",
+                                          },
+                                          lang
+                                        )}
                                       </label>
                                       <input
                                         type="text"
                                         {...register(
                                           `variants.${variantIndex}.options.${optionIndex}.value.en`
                                         )}
-                                        placeholder="English value"
+                                        placeholder={getLocalizedText(
+                                          {
+                                            en: "English value",
+                                            ar: "القيمة باللغة الإنجليزية",
+                                          },
+                                          lang
+                                        )}
                                         className={`w-full px-4 py-3 border-2 ${
                                           errors.variants?.[variantIndex]
                                             ?.options?.[optionIndex]?.value?.en
@@ -1074,14 +1333,26 @@ export default function EditProductPage() {
                                     {/* Arabic Value */}
                                     <div className="space-y-2">
                                       <label className="text-sm font-semibold text-slate-700">
-                                        Arabic Value *
+                                        {getLocalizedText(
+                                          {
+                                            en: "Arabic Value *",
+                                            ar: "القيمة باللغة العربية *",
+                                          },
+                                          lang
+                                        )}
                                       </label>
                                       <input
                                         type="text"
                                         {...register(
                                           `variants.${variantIndex}.options.${optionIndex}.value.ar`
                                         )}
-                                        placeholder="Arabic value"
+                                        placeholder={getLocalizedText(
+                                          {
+                                            en: "Arabic value",
+                                            ar: "القيمة باللغة العربية",
+                                          },
+                                          lang
+                                        )}
                                         className={`w-full px-4 py-3 border-2 ${
                                           errors.variants?.[variantIndex]
                                             ?.options?.[optionIndex]?.value?.ar
@@ -1103,14 +1374,20 @@ export default function EditProductPage() {
                                     {/* SKU */}
                                     <div className="space-y-2">
                                       <label className="text-sm font-semibold text-slate-700">
-                                        SKU *
+                                        {getLocalizedText(
+                                          { en: "SKU *", ar: "الرمز المميز *" },
+                                          lang
+                                        )}
                                       </label>
                                       <input
                                         type="text"
                                         {...register(
                                           `variants.${variantIndex}.options.${optionIndex}.sku`
                                         )}
-                                        placeholder="SKU"
+                                        placeholder={getLocalizedText(
+                                          { en: "SKU", ar: "الرمز المميز" },
+                                          lang
+                                        )}
                                         className={`w-full px-4 py-3 border-2 ${
                                           errors.variants?.[variantIndex]
                                             ?.options?.[optionIndex]?.sku
@@ -1131,14 +1408,26 @@ export default function EditProductPage() {
                                     {/* English Color Name */}
                                     <div className="space-y-2">
                                       <label className="text-sm font-semibold text-slate-700">
-                                        English Color Name *
+                                        {getLocalizedText(
+                                          {
+                                            en: "English Color Name *",
+                                            ar: "اسم اللون باللغة الإنجليزية *",
+                                          },
+                                          lang
+                                        )}
                                       </label>
                                       <input
                                         type="text"
                                         {...register(
                                           `variants.${variantIndex}.options.${optionIndex}.colorName.en`
                                         )}
-                                        placeholder="English color name"
+                                        placeholder={getLocalizedText(
+                                          {
+                                            en: "English color name",
+                                            ar: "اسم اللون باللغة الإنجليزية",
+                                          },
+                                          lang
+                                        )}
                                         className={`w-full px-4 py-3 border-2 ${
                                           errors.variants?.[variantIndex]
                                             ?.options?.[optionIndex]?.colorName
@@ -1162,14 +1451,26 @@ export default function EditProductPage() {
                                     {/* Arabic Color Name */}
                                     <div className="space-y-2">
                                       <label className="text-sm font-semibold text-slate-700">
-                                        Arabic Color Name *
+                                        {getLocalizedText(
+                                          {
+                                            en: "Arabic Color Name *",
+                                            ar: "اسم اللون باللغة العربية *",
+                                          },
+                                          lang
+                                        )}
                                       </label>
                                       <input
                                         type="text"
                                         {...register(
                                           `variants.${variantIndex}.options.${optionIndex}.colorName.ar`
                                         )}
-                                        placeholder="Arabic color name"
+                                        placeholder={getLocalizedText(
+                                          {
+                                            en: "Arabic color name",
+                                            ar: "اسم اللون باللغة العربية",
+                                          },
+                                          lang
+                                        )}
                                         className={`w-full px-4 py-3 border-2 ${
                                           errors.variants?.[variantIndex]
                                             ?.options?.[optionIndex]?.colorName
@@ -1193,14 +1494,23 @@ export default function EditProductPage() {
                                     {/* Color Hex */}
                                     <div className="space-y-2">
                                       <label className="text-sm font-semibold text-slate-700">
-                                        Color Hex Code
+                                        {getLocalizedText(
+                                          {
+                                            en: "Color Hex Code",
+                                            ar: "رمز اللون",
+                                          },
+                                          lang
+                                        )}
                                       </label>
                                       <input
                                         type="text"
                                         {...register(
                                           `variants.${variantIndex}.options.${optionIndex}.colorHex`
                                         )}
-                                        placeholder="#FFFFFF"
+                                        placeholder={getLocalizedText(
+                                          { en: "#FFFFFF", ar: "#FFFFFF" },
+                                          lang
+                                        )}
                                         className={`w-full px-4 py-3 border-2 border-gray-200 rounded-lg transition-all duration-200 bg-white/80`}
                                       />
                                     </div>
@@ -1210,14 +1520,23 @@ export default function EditProductPage() {
                                 {/* Storage */}
                                 <div className="space-y-2">
                                   <label className="text-sm font-semibold text-slate-700">
-                                    Storage *
+                                    {getLocalizedText(
+                                      { en: "Storage *", ar: "التخزين *" },
+                                      lang
+                                    )}
                                   </label>
                                   <input
                                     type="text"
                                     {...register(
                                       `variants.${variantIndex}.options.${optionIndex}.storage`
                                     )}
-                                    placeholder="e.g., 128GB"
+                                    placeholder={getLocalizedText(
+                                      {
+                                        en: "e.g., 128GB",
+                                        ar: "مثال: 128 جيجابايت",
+                                      },
+                                      lang
+                                    )}
                                     className={`w-full px-4 py-3 border-2 ${
                                       errors.variants?.[variantIndex]
                                         ?.options?.[optionIndex]?.storage
@@ -1240,14 +1559,23 @@ export default function EditProductPage() {
                                 {/* RAM */}
                                 <div className="space-y-2">
                                   <label className="text-sm font-semibold text-slate-700">
-                                    RAM
+                                    {getLocalizedText(
+                                      { en: "RAM", ar: "الرام" },
+                                      lang
+                                    )}
                                   </label>
                                   <input
                                     type="text"
                                     {...register(
                                       `variants.${variantIndex}.options.${optionIndex}.ram`
                                     )}
-                                    placeholder="e.g., 8GB"
+                                    placeholder={getLocalizedText(
+                                      {
+                                        en: "e.g., 8GB",
+                                        ar: "مثال: 8 جيجابايت",
+                                      },
+                                      lang
+                                    )}
                                     className={`w-full px-4 py-3 border-2 border-gray-200 rounded-lg transition-all duration-200 bg-white/80`}
                                   />
                                   {errors.variants?.[variantIndex]?.options?.[
@@ -1265,7 +1593,10 @@ export default function EditProductPage() {
                                 {/* Price */}
                                 <div className="space-y-2">
                                   <label className="text-sm font-semibold text-slate-700">
-                                    Price *
+                                    {getLocalizedText(
+                                      { en: "Price *", ar: "السعر *" },
+                                      lang
+                                    )}
                                   </label>
                                   <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">
@@ -1276,7 +1607,10 @@ export default function EditProductPage() {
                                       {...register(
                                         `variants.${variantIndex}.options.${optionIndex}.price`
                                       )}
-                                      placeholder="0.00"
+                                      placeholder={getLocalizedText(
+                                        { en: "0.00", ar: "0.00" },
+                                        lang
+                                      )}
                                       min="0"
                                       step="0.01"
                                       className={`w-full pl-8 pr-3 py-3 border-2 ${
@@ -1302,7 +1636,10 @@ export default function EditProductPage() {
                                 {/* Discount */}
                                 <div className="space-y-2">
                                   <label className="text-sm font-semibold text-slate-700">
-                                    Discount (%)
+                                    {getLocalizedText(
+                                      { en: "Discount (%)", ar: "الخصم (%)" },
+                                      lang
+                                    )}
                                   </label>
                                   <div className="relative">
                                     <input
@@ -1310,7 +1647,10 @@ export default function EditProductPage() {
                                       {...register(
                                         `variants.${variantIndex}.options.${optionIndex}.discount`
                                       )}
-                                      placeholder="0"
+                                      placeholder={getLocalizedText(
+                                        { en: "0", ar: "0" },
+                                        lang
+                                      )}
                                       min="0"
                                       max="100"
                                       className={`w-full px-3 py-3 border-2 ${
@@ -1339,14 +1679,23 @@ export default function EditProductPage() {
                                 {/* Stock */}
                                 <div className="space-y-2">
                                   <label className="text-sm font-semibold text-slate-700">
-                                    Stock *
+                                    {getLocalizedText(
+                                      { en: "Stock *", ar: "المخزون *" },
+                                      lang
+                                    )}
                                   </label>
                                   <input
                                     type="number"
                                     {...register(
                                       `variants.${variantIndex}.options.${optionIndex}.stock`
                                     )}
-                                    placeholder="Available quantity"
+                                    placeholder={getLocalizedText(
+                                      {
+                                        en: "Available quantity",
+                                        ar: "الكمية المتاحة",
+                                      },
+                                      lang
+                                    )}
                                     min="0"
                                     className={`w-full px-4 py-3 border-2 ${
                                       errors.variants?.[variantIndex]
@@ -1371,7 +1720,13 @@ export default function EditProductPage() {
 
                               <div className="space-y-3">
                                 <label className="text-sm font-semibold text-slate-700">
-                                  Variant Images
+                                  {getLocalizedText(
+                                    {
+                                      en: "Variant Images",
+                                      ar: "صور المتغيرات",
+                                    },
+                                    lang
+                                  )}
                                 </label>
                                 <div className="relative group">
                                   {optionIndex === 0 && (
@@ -1406,10 +1761,22 @@ export default function EditProductPage() {
                                       <Upload className="w-8 h-8 text-purple-600" />
                                     </div>
                                     <p className="font-medium text-slate-700 mb-1">
-                                      Upload Variant Images
+                                      {getLocalizedText(
+                                        {
+                                          en: "Upload Variant Images",
+                                          ar: "تحميل صور المتغيرات",
+                                        },
+                                        lang
+                                      )}
                                     </p>
                                     <p className="text-sm text-slate-500">
-                                      Multiple images supported
+                                      {getLocalizedText(
+                                        {
+                                          en: "Multiple images supported",
+                                          ar: "صور متعددة مدعومة",
+                                        },
+                                        lang
+                                      )}
                                     </p>
                                   </label>
                                 </div>
@@ -1433,9 +1800,15 @@ export default function EditProductPage() {
                                       >
                                         <img
                                           src={image.url}
-                                          alt={`Variant ${
+                                          alt={`${getLocalizedText(
+                                            { en: "Variant", ar: "متغير" },
+                                            lang
+                                          )} ${
                                             variantIndex + 1
-                                          } image ${imgIndex + 1}`}
+                                          } ${getLocalizedText(
+                                            { en: "image", ar: "صورة" },
+                                            lang
+                                          )} ${imgIndex + 1}`}
                                           className="w-full h-26 object-contain rounded-lg bg-gray-50"
                                         />
                                         {optionIndex === 0 && (
@@ -1475,9 +1848,20 @@ export default function EditProductPage() {
               <div className="flex items-center gap-3">
                 <Settings className="w-6 h-6" />
                 <div>
-                  <h2 className="text-2xl font-bold">Product Specifications</h2>
+                  <h2 className="text-2xl font-bold">
+                    {getLocalizedText(
+                      { en: "Product Specifications", ar: "مواصفات المنتج" },
+                      lang
+                    )}
+                  </h2>
                   <p className="text-gray-400 mt-1">
-                    Technical details and features
+                    {getLocalizedText(
+                      {
+                        en: "Technical details and features",
+                        ar: "التفاصيل الفنية والميزات",
+                      },
+                      lang
+                    )}
                   </p>
                 </div>
               </div>
@@ -1491,7 +1875,13 @@ export default function EditProductPage() {
                     className="p-6 border border-gray-300 bg-gray-50 rounded-xl"
                   >
                     <div className="flex justify-between items-center mb-4">
-                      <h4 className="font-medium">Specification {index + 1}</h4>
+                      <h4 className="font-medium">
+                        {getLocalizedText(
+                          { en: "Specification", ar: "المواصفة" },
+                          lang
+                        )}{" "}
+                        {index + 1}
+                      </h4>
                       <button
                         type="button"
                         onClick={() => {
@@ -1509,12 +1899,24 @@ export default function EditProductPage() {
                       {/* Specification Name (English) */}
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">
-                          English Name *
+                          {getLocalizedText(
+                            {
+                              en: "English Name *",
+                              ar: "اسم المواصفة باللغة الإنجليزية *",
+                            },
+                            lang
+                          )}
                         </label>
                         <input
                           type="text"
                           {...register(`specifications.${index}.name.en`)}
-                          placeholder="English name"
+                          placeholder={getLocalizedText(
+                            {
+                              en: "English name",
+                              ar: "اسم المواصفة باللغة الإنجليزية",
+                            },
+                            lang
+                          )}
                           className={`w-full px-4 py-3 border-2 ${
                             errors.specifications?.[index]?.name?.en
                               ? "border-red-500"
@@ -1531,12 +1933,24 @@ export default function EditProductPage() {
                       {/* Specification Name (Arabic) */}
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">
-                          Arabic Name *
+                          {getLocalizedText(
+                            {
+                              en: "Arabic Name *",
+                              ar: "اسم المواصفة باللغة العربية *",
+                            },
+                            lang
+                          )}
                         </label>
                         <input
                           type="text"
                           {...register(`specifications.${index}.name.ar`)}
-                          placeholder="Arabic name"
+                          placeholder={getLocalizedText(
+                            {
+                              en: "Arabic name",
+                              ar: "اسم المواصفة باللغة العربية",
+                            },
+                            lang
+                          )}
                           className={`w-full px-4 py-3 border-2 ${
                             errors.specifications?.[index]?.name?.ar
                               ? "border-red-500"
@@ -1550,66 +1964,60 @@ export default function EditProductPage() {
                         )}
                       </div>
 
-                      {/* Value */}
+                      {/* Value English */}
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">
-                          Value *
+                          {getLocalizedText(
+                            { en: "Value (EN) *", ar: "القيمة (إنجليزي) *" },
+                            lang
+                          )}
                         </label>
                         <input
                           type="text"
-                          {...register(`specifications.${index}.value`)}
-                          placeholder="Value"
+                          {...register(`specifications.${index}.value.en`)}
+                          placeholder={getLocalizedText(
+                            { en: "English value", ar: "القيمة بالإنجليزية" },
+                            lang
+                          )}
                           className={`w-full px-4 py-3 border-2 ${
-                            errors.specifications?.[index]?.value
+                            errors.specifications?.[index]?.value?.en
                               ? "border-red-500"
                               : "border-gray-200"
                           } rounded-lg transition-all duration-200 bg-white/80`}
                         />
-                        {errors.specifications?.[index]?.value && (
+                        {errors.specifications?.[index]?.value?.en && (
                           <p className="text-red-500 text-sm">
-                            {errors.specifications[index].value.message}
+                            {errors.specifications[index].value.en.message}
                           </p>
                         )}
                       </div>
 
-                      {/* English Unit */}
+                      {/* Value Arabic */}
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-slate-700">
-                          English Unit
+                          {getLocalizedText(
+                            { en: "Value (AR) *", ar: "القيمة (عربي) *" },
+                            lang
+                          )}
                         </label>
                         <input
                           type="text"
-                          {...register(`specifications.${index}.unit.en`)}
-                          placeholder="English unit"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg transition-all duration-200 bg-white/80"
+                          {...register(`specifications.${index}.value.ar`)}
+                          placeholder={getLocalizedText(
+                            { en: "Arabic value", ar: "القيمة بالعربية" },
+                            lang
+                          )}
+                          className={`w-full px-4 py-3 border-2 ${
+                            errors.specifications?.[index]?.value?.ar
+                              ? "border-red-500"
+                              : "border-gray-200"
+                          } rounded-lg transition-all duration-200 bg-white/80`}
                         />
-                      </div>
-
-                      {/* Arabic Unit */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700">
-                          Arabic Unit
-                        </label>
-                        <input
-                          type="text"
-                          {...register(`specifications.${index}.unit.ar`)}
-                          placeholder="Arabic unit"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg transition-all duration-200 bg-white/80"
-                        />
-                      </div>
-
-                      {/* Is Filterable */}
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-700 flex items-center">
-                          <input
-                            type="checkbox"
-                            {...register(
-                              `specifications.${index}.isFilterable`
-                            )}
-                            className="mr-2 w-4 h-4 text-blue-600 rounded"
-                          />
-                          Is Filterable?
-                        </label>
+                        {errors.specifications?.[index]?.value?.ar && (
+                          <p className="text-red-500 text-sm">
+                            {errors.specifications[index].value.ar.message}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1621,16 +2029,17 @@ export default function EditProductPage() {
                       ...specifications,
                       {
                         name: { en: "", ar: "" },
-                        value: "",
-                        unit: { en: "", ar: "" },
-                        isFilterable: false,
+                        value: { en: "", ar: "" },
                       },
                     ]);
                   }}
                   className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
-                  Add Specification
+                  {getLocalizedText(
+                    { en: "Add Specification", ar: "إضافة مواصفة" },
+                    lang
+                  )}
                 </button>
               </div>
             </div>
@@ -1644,7 +2053,7 @@ export default function EditProductPage() {
                 onClick={handleBack}
                 className="px-8 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 hover:border-slate-400 transition-all duration-200"
               >
-                Cancel
+                {getLocalizedText({ en: "Cancel", ar: "إلغاء" }, lang)}
               </button>
               <button
                 type="submit"
@@ -1654,12 +2063,18 @@ export default function EditProductPage() {
                 {loading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Saving Changes...
+                    {getLocalizedText(
+                      { en: "Saving Changes...", ar: "جاري حفظ التغييرات..." },
+                      lang
+                    )}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    Save Changes
+                    {getLocalizedText(
+                      { en: "Save Changes", ar: "حفظ التغييرات" },
+                      lang
+                    )}
                   </>
                 )}
               </button>

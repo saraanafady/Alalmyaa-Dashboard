@@ -15,6 +15,11 @@ const CartPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [updatingItemId, setUpdatingItemId] = useState(null);
+  const [adminSearch, setAdminSearch] = useState("");
+  const [adminMinPrice, setAdminMinPrice] = useState("");
+  const [adminMaxPrice, setAdminMaxPrice] = useState("");
+  const [editingCart, setEditingCart] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   // Function to safely format currency
   const formatCurrency = (amount) => {
@@ -22,88 +27,34 @@ const CartPage = () => {
     return isNaN(num) ? "0.00" : num.toFixed(2);
   };
 
-  // Fetch cart items from the API
-  const fetchCartItems = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No authentication token found");
-      }
-
-      console.log("Fetching cart with token:", token);
-      console.log("API URL:", `${base_url}/api/cart`);
-
+  // Fetch all carts for admin, or just the user's cart for normal users
+  const fetchCarts = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) throw new Error("No authentication token found");
+    if (user && user.role === "admin") {
+      const response = await axios.get(`${base_url}/api/cart/admin`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return { isAdmin: true, carts: response.data.data.carts };
+    } else {
       const response = await axios.get(`${base_url}/api/cart`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        withCredentials: true
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log("Cart API Response:", response.data);
-
-      if (!response.data) {
-        console.error("Empty response from API");
-        return { items: [], totalPrice: 0, discount: 0, totalPriceAfterDiscount: 0 };
-      }
-
-      // The backend returns the cart data directly, not wrapped in a data property
-      const cartData = response.data;
-      
-      // Validate the cart data structure
-      if (!Array.isArray(cartData.items)) {
-        console.error("Invalid cart data structure:", cartData);
-        return { items: [], totalPrice: 0, discount: 0, totalPriceAfterDiscount: 0 };
-      }
-
-      return {
-        items: cartData.items || [],
-        totalPrice: cartData.totalPrice || 0,
-        discount: cartData.discount || 0,
-        totalPriceAfterDiscount: cartData.totalPrice || 0 // Since there's no totalPriceAfterDiscount in backend
-      };
-    } catch (error) {
-      console.error("Error fetching cart items:", error);
-      console.error("Error details:", {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-        headers: error.response?.headers,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers
-        }
-      });
-
-      // Log the full error response if available
-      if (error.response) {
-        console.error("Full error response:", {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data,
-          headers: error.response.headers
-        });
-      }
-
-      if (error.response?.status === 401) {
-        navigate("/login");
-      }
-      return { items: [], totalPrice: 0, discount: 0, totalPriceAfterDiscount: 0 };
+      return { isAdmin: false, cart: response.data.data };
     }
   };
 
   const {
-    data: cartData = { items: [], totalPrice: 0, discount: 0, totalPriceAfterDiscount: 0 },
+    data: cartData,
     isLoading,
     isError,
     error,
   } = useQuery({
-    queryKey: ["cart"],
-    queryFn: fetchCartItems,
+    queryKey: ["cart", user?.role],
+    queryFn: fetchCarts,
     retry: 3,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!user,
   });
 
   // Update quantity mutation
@@ -200,11 +151,72 @@ const CartPage = () => {
     });
   }, [cartData?.items, searchTerm]);
 
+  // Memoized filtered admin carts
+  const filteredAdminCarts = useMemo(() => {
+    if (!cartData?.isAdmin || !cartData.carts) return [];
+    return cartData.carts.filter(cart => {
+      const name = `${cart.user?.firstName || ''} ${cart.user?.lastName || ''}`.toLowerCase();
+      const searchMatch = name.includes(adminSearch.toLowerCase());
+      const total = cart.totalPriceAfterDiscount || cart.totalPrice || 0;
+      const minOk = adminMinPrice === "" || total >= Number(adminMinPrice);
+      const maxOk = adminMaxPrice === "" || total <= Number(adminMaxPrice);
+      return searchMatch && minOk && maxOk;
+    });
+  }, [cartData, adminSearch, adminMinPrice, adminMaxPrice]);
+
+  const deleteCartMutation = useMutation({
+    mutationFn: async (cartId) => {
+      const token = localStorage.getItem("token");
+      await axios.delete(`${base_url}/api/cart/admin/${cartId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Cart deleted successfully");
+      queryClient.invalidateQueries(["cart"]);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || "Failed to delete cart");
+    },
+  });
+
+  const handleDeleteCart = (cartId) => {
+    if (window.confirm("Are you sure you want to delete this cart?")) {
+      deleteCartMutation.mutate(cartId);
+    }
+  };
+
+  const updateCartMutation = useMutation({
+    mutationFn: async ({ cartId, data }) => {
+      const token = localStorage.getItem("token");
+      return axios.patch(`${base_url}/api/cart/admin/${cartId}`, data, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Cart updated successfully");
+      queryClient.invalidateQueries(["cart"]);
+      setEditModalOpen(false);
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.message || "Failed to update cart");
+    },
+  });
+
+  const handleUpdateCart = (cart) => {
+    setEditingCart(cart);
+    setEditModalOpen(true);
+  };
+
+  const handleSaveCart = (updatedCartData) => {
+    updateCartMutation.mutate({ cartId: editingCart._id, data: updatedCartData });
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col justify-center items-center min-h-[60vh] space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        <span className="text-gray-600 text-lg">Loading cart...</span>
+        <span className="text-gray-600 text-lg">Loading cart(s)...</span>
       </div>
     );
   }
@@ -212,13 +224,167 @@ const CartPage = () => {
   if (isError) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600">Error loading cart: {error?.message}</p>
+        <p className="text-red-600">Error loading cart(s): {error?.message}</p>
         <button
           onClick={() => queryClient.invalidateQueries(["cart"])}
           className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           Retry
         </button>
+      </div>
+    );
+  }
+
+  if (cartData?.isAdmin) {
+    // Admin view: all carts
+    return (
+      <div className="space-y-8">
+        <h1 className="text-2xl font-semibold text-gray-900 mb-4">All Carts (Admin View)</h1>
+        {/* Admin Filters */}
+        <div className="flex flex-col md:flex-row gap-4 mb-4">
+          <input
+            type="text"
+            placeholder="Search by customer name..."
+            value={adminSearch}
+            onChange={e => setAdminSearch(e.target.value)}
+            className="border px-3 py-2 rounded w-full md:w-1/3"
+          />
+          <input
+            type="number"
+            placeholder="Min Price"
+            value={adminMinPrice}
+            onChange={e => setAdminMinPrice(e.target.value)}
+            className="border px-3 py-2 rounded w-full md:w-1/6"
+          />
+          <input
+            type="number"
+            placeholder="Max Price"
+            value={adminMaxPrice}
+            onChange={e => setAdminMaxPrice(e.target.value)}
+            className="border px-3 py-2 rounded w-full md:w-1/6"
+          />
+          <div className="flex items-center text-gray-600 text-sm ml-auto">
+            Showing <span className="font-semibold mx-1">{filteredAdminCarts.length}</span> cart{filteredAdminCarts.length !== 1 && 's'}
+          </div>
+        </div>
+        {filteredAdminCarts.length === 0 && <div>No carts found.</div>}
+        {filteredAdminCarts.map((cart) => (
+          <div key={cart._id} className="bg-white shadow rounded-lg p-6 mb-8">
+            <div className="mb-2 flex justify-between items-center">
+              <div>
+                <span className="font-semibold">User:</span> {cart.user?.firstName} {cart.user?.lastName} ({cart.user?.email})
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleUpdateCart(cart)}
+                  className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Update
+                </button>
+                <button
+                  onClick={() => handleDeleteCart(cart._id)}
+                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+            <div className="mb-2">
+              <span className="font-semibold">Phone:</span> {cart.user?.phoneNumber || 'N/A'}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 mb-4">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Quantity</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Price</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {cart.items.map((item, idx) => (
+                    <tr key={item._id || idx}>
+                      <td className="px-4 py-2 text-sm text-gray-900">{item.product?.name || 'N/A'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-500">{item.quantity}</td>
+                      <td className="px-4 py-2 text-sm text-gray-500">${formatCurrency(item.price)}</td>
+                      <td className="px-4 py-2 text-sm text-gray-900">${formatCurrency(item.price * item.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end space-x-8">
+              <div><span className="font-semibold">Total:</span> ${formatCurrency(cart.totalPrice)}</div>
+              <div><span className="font-semibold">Discount:</span> {cart.discount || 0}%</div>
+              <div><span className="font-semibold">Total After Discount:</span> ${formatCurrency(cart.totalPrice - (cart.totalPrice * (cart.discount || 0) / 100))}</div>
+            </div>
+          </div>
+        ))}
+        {editModalOpen && editingCart && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
+              <h2 className="text-xl font-semibold mb-4">Edit Cart</h2>
+              <label className="block mb-2 text-sm font-medium">Discount (%)</label>
+              <input
+                type="number"
+                value={editingCart.discount}
+                onChange={e => setEditingCart({ ...editingCart, discount: e.target.value })}
+                className="border px-3 py-2 rounded w-full mb-4"
+              />
+              <div className="mb-4">
+                <h3 className="font-medium mb-2">Items</h3>
+                {editingCart.items.map((item, idx) => (
+                  <div key={item._id || idx} className="flex items-center gap-2 mb-2">
+                    <span className="flex-1">{item.product?.name || 'Product'}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={item.quantity}
+                      onChange={e => {
+                        const newItems = editingCart.items.map((it, i) =>
+                          i === idx ? { ...it, quantity: Number(e.target.value) } : it
+                        );
+                        setEditingCart({ ...editingCart, items: newItems });
+                      }}
+                      className="w-20 border px-2 py-1 rounded"
+                    />
+                    <button
+                      onClick={() => {
+                        const newItems = editingCart.items.filter((_, i) => i !== idx);
+                        setEditingCart({ ...editingCart, items: newItems });
+                      }}
+                      className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                {editingCart.items.length === 0 && (
+                  <div className="text-gray-400 text-sm">No items in cart.</div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                >Cancel</button>
+                <button
+                  onClick={() => handleSaveCart({
+                    discount: Number(editingCart.discount),
+                    items: editingCart.items.map(({ product, quantity, price }) => ({
+                      product: product._id || product,
+                      quantity,
+                      price
+                    }))
+                  })}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  disabled={updateCartMutation.isLoading}
+                >Save</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -447,5 +613,6 @@ const CartPage = () => {
     </div>
   );
 };
+
 
 export default CartPage;

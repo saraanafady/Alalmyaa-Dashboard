@@ -1,4 +1,4 @@
-import React, { useEffect, useContext } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import axios from "axios";
 import slugify from "slugify";
@@ -11,12 +11,36 @@ import {
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
+const getLocalizedText = (obj, lang, fallback = "") => {
+  if (!obj) return fallback;
+  if (typeof obj === "string") return obj;
+  if (typeof obj === "object" && obj !== null) {
+    if (obj[lang] && typeof obj[lang] === "string" && obj[lang].trim())
+      return obj[lang].trim();
+    if (obj.en && typeof obj.en === "string" && obj.en.trim())
+      return obj.en.trim();
+    if (obj.ar && typeof obj.ar === "string" && obj.ar.trim())
+      return obj.ar.trim();
+  }
+  return fallback;
+};
+
 const LocaleContext = React.createContext({ locale: "en" });
 
 const API_BASE_URL = "http://localhost:3000/api";
 
 const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
-  const { locale } = useContext(LocaleContext);
+  const [lang, setLang] = useState(localStorage.getItem("language") || "en");
+
+  useEffect(() => {
+    const handleLanguageChange = () => {
+      setLang(localStorage.getItem("language") || "en");
+    };
+    window.addEventListener("languageChanged", handleLanguageChange);
+    return () => {
+      window.removeEventListener("languageChanged", handleLanguageChange);
+    };
+  }, []);
 
   const {
     register,
@@ -25,6 +49,7 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
     reset,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm({
     defaultValues: defaultValues || {
@@ -56,9 +81,7 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
       specifications: [
         {
           name: { en: "", ar: "" },
-          value: "",
-          unit: { en: "", ar: "" },
-          isFilterable: false,
+          value: { en: "", ar: "" },
         },
       ],
       category: "",
@@ -66,7 +89,6 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
       subSubcategory: "",
       brand: "",
       isFeatured: false,
-      isActive: true,
     },
   });
 
@@ -209,10 +231,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
   };
 
   // --- Remove Image (Main) ---
-  const removeMainImage = (indexToRemove) => {
+  const removeMainImage = (publicIdToRemove) => {
     const currentImages = watch("images");
     const updatedImages = currentImages.filter(
-      (_, idx) => idx !== indexToRemove
+      (img) => img.public_id !== publicIdToRemove
     );
     setValue("images", updatedImages);
   };
@@ -221,17 +243,39 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
   const removeVariantImage = (
     variantTypeIndex,
     optionIndex,
-    imageIndexToRemove
+    publicIdToRemove
   ) => {
     const currentVariantOptions = watch(`variants.${variantTypeIndex}.options`);
     const currentVariantImages =
       currentVariantOptions[optionIndex].variantImages;
     const updatedVariantImages = currentVariantImages.filter(
-      (_, idx) => idx !== imageIndexToRemove
+      (img) => img.public_id !== publicIdToRemove
     );
     setValue(
       `variants.${variantTypeIndex}.options.${optionIndex}.variantImages`,
       updatedVariantImages
+    );
+  };
+
+  const updateVariantImageAlt = (
+    variantTypeIndex,
+    optionIndex,
+    public_id,
+    field,
+    value
+  ) => {
+    const options = getValues(`variants.${variantTypeIndex}.options`);
+    if (!options || !options[optionIndex]) return;
+
+    const updatedImages = options[optionIndex].variantImages.map((img) => {
+      if (img.public_id === public_id) {
+        return { ...img, altText: { ...img.altText, [field]: value } };
+      }
+      return img;
+    });
+    setValue(
+      `variants.${variantTypeIndex}.options.${optionIndex}.variantImages`,
+      updatedImages
     );
   };
 
@@ -324,14 +368,17 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
         )}
         <button
           type="button"
-          onClick={() => removeMainImage(index)}
+          onClick={() => removeMainImage(img.public_id)}
           className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
         >
           &times;
         </button>
         <div className="p-1">
           <label className="block text-xs font-medium text-gray-600">
-            Alt Text (EN)
+            {getLocalizedText(
+              { en: "Alt Text (EN)", ar: "نص بديل (الإنجليزية)" },
+              lang
+            )}
           </label>
           <input
             type="text"
@@ -339,7 +386,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             className="w-full text-xs p-1 border rounded"
           />
           <label className="block text-xs font-medium text-gray-600 mt-1">
-            Alt Text (AR)
+            {getLocalizedText(
+              { en: "Alt Text (AR)", ar: "نص بديل (العربية)" },
+              lang
+            )}
           </label>
           <input
             type="text"
@@ -368,10 +418,15 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
     <form
       onSubmit={handleSubmit(onSubmit)}
       className="p-6 bg-white rounded-lg shadow-md w-full mx-auto my-8"
-      dir={locale === "ar" ? "rtl" : "ltr"}
+      dir={lang === "ar" ? "rtl" : "ltr"}
     >
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-        {defaultValues ? "Edit Product" : "Add New Product"}
+        {defaultValues
+          ? getLocalizedText({ en: "Edit Product", ar: "تعديل المنتج" }, lang)
+          : getLocalizedText(
+              { en: "Add New Product", ar: "إضافة منتج جديد" },
+              lang
+            )}
       </h2>
 
       {/* Basic Product Info */}
@@ -381,7 +436,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             htmlFor="name.en"
             className="block text-sm font-medium text-gray-700"
           >
-            Product Name (English)
+            {getLocalizedText(
+              { en: "Product Name (English)", ar: "اسم المنتج (الإنجليزية)" },
+              lang
+            )}
           </label>
           <input
             id="name.en"
@@ -399,7 +457,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             htmlFor="name.ar"
             className="block text-sm font-medium text-gray-700"
           >
-            Product Name (Arabic)
+            {getLocalizedText(
+              { en: "Product Name (Arabic)", ar: "اسم المنتج (العربية)" },
+              lang
+            )}
           </label>
           <input
             id="name.ar"
@@ -419,7 +480,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
           htmlFor="shortDescription.en"
           className="block text-sm font-medium text-gray-700"
         >
-          Short Description (English)
+          {getLocalizedText(
+            { en: "Short Description (English)", ar: "وصف قصير (الإنجليزية)" },
+            lang
+          )}
         </label>
         <textarea
           id="shortDescription.en"
@@ -433,7 +497,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
           htmlFor="shortDescription.ar"
           className="block text-sm font-medium text-gray-700"
         >
-          Short Description (Arabic)
+          {getLocalizedText(
+            { en: "Short Description (Arabic)", ar: "وصف قصير (العربية)" },
+            lang
+          )}
         </label>
         <textarea
           id="shortDescription.ar"
@@ -446,7 +513,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
       {/* Rich Text Editor for Details */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Details (English)
+          {getLocalizedText(
+            { en: "Details (English)", ar: "التفاصيل (الإنجليزية)" },
+            lang
+          )}
         </label>
         <Controller
           name="details.en"
@@ -464,7 +534,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
       </div>
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Details (Arabic)
+          {getLocalizedText(
+            { en: "Details (Arabic)", ar: "التفاصيل (العربية)" },
+            lang
+          )}
         </label>
         <Controller
           name="details.ar"
@@ -487,7 +560,7 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
           htmlFor="basePrice"
           className="block text-sm font-medium text-gray-700"
         >
-          Base Price
+          {getLocalizedText({ en: "Base Price", ar: "السعر الأساسي" }, lang)}
         </label>
         <input
           id="basePrice"
@@ -514,22 +587,37 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             htmlFor="category"
             className="block text-sm font-medium text-gray-700"
           >
-            Category
+            {getLocalizedText({ en: "Category", ar: "الفئة" }, lang)}
           </label>
           {isLoadingCategories ? (
-            <p>Loading categories...</p>
+            <p>
+              {getLocalizedText(
+                { en: "Loading categories...", ar: "جاري تحميل الفئات..." },
+                lang
+              )}
+            </p>
           ) : isErrorCategories ? (
-            <p className="text-red-500">Error loading categories</p>
+            <p className="text-red-500">
+              {getLocalizedText(
+                { en: "Error loading categories", ar: "خطأ في تحميل الفئات" },
+                lang
+              )}
+            </p>
           ) : (
             <select
               id="category"
               {...register("category", { required: "Category is required" })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
             >
-              <option value="">Select Category</option>
+              <option value="">
+                {getLocalizedText(
+                  { en: "Select Category", ar: "اختر الفئة" },
+                  lang
+                )}
+              </option>
               {allCategories.map((cat) => (
                 <option key={cat._id} value={cat._id}>
-                  {typeof cat.name === "object" ? cat.name[locale] : cat.name}
+                  {getLocalizedText(cat.name, lang)}
                 </option>
               ))}
             </select>
@@ -545,7 +633,7 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             htmlFor="subCategory"
             className="block text-sm font-medium text-gray-700"
           >
-            Subcategory
+            {getLocalizedText({ en: "Subcategory", ar: "الفئة الفرعية" }, lang)}
           </label>
           <select
             id="subCategory"
@@ -553,10 +641,15 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
             disabled={!selectedCategoryObj}
           >
-            <option value="">Select Subcategory</option>
+            <option value="">
+              {getLocalizedText(
+                { en: "Select Subcategory", ar: "اختر الفئة الفرعية" },
+                lang
+              )}
+            </option>
             {selectedCategoryObj?.subcategories?.map((sub) => (
               <option key={sub._id} value={sub._id}>
-                {typeof sub.name === "object" ? sub.name[locale] : sub.name}
+                {getLocalizedText(sub.name, lang)}
               </option>
             ))}
           </select>
@@ -566,7 +659,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             htmlFor="subSubcategory"
             className="block text-sm font-medium text-gray-700"
           >
-            Sub-Subcategory
+            {getLocalizedText(
+              { en: "Sub-Subcategory", ar: "الفئة الفرعية الفرعية" },
+              lang
+            )}
           </label>
           <select
             id="subSubcategory"
@@ -574,12 +670,18 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
             disabled={!selectedSubCategoryObj}
           >
-            <option value="">Select Sub-Subcategory</option>
+            <option value="">
+              {getLocalizedText(
+                {
+                  en: "Select Sub-Subcategory",
+                  ar: "اختر الفئة الفرعية الفرعية",
+                },
+                lang
+              )}
+            </option>
             {selectedSubCategoryObj?.subSubcategories?.map((subsub) => (
               <option key={subsub._id} value={subsub._id}>
-                {typeof subsub.name === "object"
-                  ? subsub.name[locale]
-                  : subsub.name}
+                {getLocalizedText(subsub.name, lang)}
               </option>
             ))}
           </select>
@@ -592,19 +694,40 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
           htmlFor="brand"
           className="block text-sm font-medium text-gray-700"
         >
-          Brand
+          {getLocalizedText({ en: "Brand", ar: "العلامة التجارية" }, lang)}
         </label>
         {isLoadingBrands ? (
-          <p>Loading brands...</p>
+          <p>
+            {getLocalizedText(
+              {
+                en: "Loading brands...",
+                ar: "جاري تحميل العلامات التجارية...",
+              },
+              lang
+            )}
+          </p>
         ) : isErrorBrands ? (
-          <p className="text-red-500">Error loading brands</p>
+          <p className="text-red-500">
+            {getLocalizedText(
+              {
+                en: "Error loading brands",
+                ar: "خطأ في تحميل العلامات التجارية",
+              },
+              lang
+            )}
+          </p>
         ) : (
           <select
             id="brand"
             {...register("brand", { required: "Brand is required" })}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border"
           >
-            <option value="">Select Brand</option>
+            <option value="">
+              {getLocalizedText(
+                { en: "Select Brand", ar: "اختر العلامة التجارية" },
+                lang
+              )}
+            </option>
             {Array.isArray(allBrands) &&
               allBrands.map((brand) => (
                 <option key={brand._id} value={brand._id}>
@@ -622,7 +745,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
       {/* Main Product Images */}
       <div className="mb-6 p-4 border border-dashed border-gray-300 rounded-md">
         <h3 className="text-lg font-semibold text-gray-700 mb-3">
-          Main Product Images
+          {getLocalizedText(
+            { en: "Main Product Images", ar: "صور المنتج الرئيسية" },
+            lang
+          )}
         </h3>
         <input
           type="file"
@@ -633,11 +759,23 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
           disabled={uploadMutation.isPending}
         />
         {uploadMutation.isPending && (
-          <p className="text-indigo-600 mt-2">Uploading main images...</p>
+          <p className="text-indigo-600 mt-2">
+            {getLocalizedText(
+              {
+                en: "Uploading main images...",
+                ar: "جاري تحميل الصور الرئيسية...",
+              },
+              lang
+            )}
+          </p>
         )}
         {uploadMutation.isError && (
           <p className="text-red-500 mt-2">
-            Error uploading: {uploadMutation.error.message}
+            {getLocalizedText(
+              { en: "Error uploading:", ar: "خطأ في التحميل:" },
+              lang
+            )}{" "}
+            {uploadMutation.error.message}
           </p>
         )}
 
@@ -652,7 +790,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
       <div className="mb-6 p-4 border border-dashed border-gray-300 rounded-md">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-700">
-            {locale === "ar" ? "متغيرات المنتج" : "Product Variants"}
+            {getLocalizedText(
+              { en: "Product Variants", ar: "متغيرات المنتج" },
+              lang
+            )}
           </h3>
           <div className="flex gap-2">
             <button
@@ -674,7 +815,10 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
                   clipRule="evenodd"
                 />
               </svg>
-              {locale === "ar" ? "إضافة نوع متغير" : "Add Variant Type"}
+              {getLocalizedText(
+                { en: "Add Variant Type", ar: "إضافة نوع متغير" },
+                lang
+              )}
             </button>
           </div>
         </div>
@@ -686,9 +830,11 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
           >
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-md font-medium text-gray-700">
-                {locale === "ar"
-                  ? `نوع المتغير #${variantTypeIndex + 1}`
-                  : `Variant Type #${variantTypeIndex + 1}`}
+                {getLocalizedText(
+                  { en: "Variant Type #", ar: "نوع المتغير #" },
+                  lang
+                )}
+                {variantTypeIndex + 1}
               </h4>
               <button
                 type="button"
@@ -707,27 +853,35 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
                     clipRule="evenodd"
                   />
                 </svg>
-                {locale === "ar" ? "حذف" : "Remove"}
+                {getLocalizedText({ en: "Remove", ar: "حذف" }, lang)}
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  {locale === "ar"
-                    ? "اسم المتغير (الإنجليزية)"
-                    : "Variant Name (English)"}
+                  {getLocalizedText(
+                    {
+                      en: "Variant Name (English)",
+                      ar: "اسم المتغير (الإنجليزية)",
+                    },
+                    lang
+                  )}
                 </label>
                 <input
                   {...register(`variants.${variantTypeIndex}.name.en`, {
-                    required:
-                      locale === "ar"
-                        ? "اسم المتغير مطلوب"
-                        : "Variant name is required",
+                    required: getLocalizedText(
+                      {
+                        en: "Variant name is required",
+                        ar: "اسم المتغير مطلوب",
+                      },
+                      lang
+                    ),
                   })}
-                  placeholder={
-                    locale === "ar" ? "مثال: التكوين" : "e.g., Configuration"
-                  }
+                  placeholder={getLocalizedText(
+                    { en: "e.g., Configuration", ar: "مثال: التكوين" },
+                    lang
+                  )}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 {errors.variants?.[variantTypeIndex]?.name?.en && (
@@ -738,20 +892,28 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  {locale === "ar"
-                    ? "اسم المتغير (العربية)"
-                    : "Variant Name (Arabic)"}
+                  {getLocalizedText(
+                    {
+                      en: "Variant Name (Arabic)",
+                      ar: "اسم المتغير (العربية)",
+                    },
+                    lang
+                  )}
                 </label>
                 <input
                   {...register(`variants.${variantTypeIndex}.name.ar`, {
-                    required:
-                      locale === "ar"
-                        ? "اسم المتغير مطلوب"
-                        : "Variant name is required",
+                    required: getLocalizedText(
+                      {
+                        en: "Variant name is required",
+                        ar: "اسم المتغير مطلوب",
+                      },
+                      lang
+                    ),
                   })}
-                  placeholder={
-                    locale === "ar" ? "مثال: التكوين" : "e.g., Configuration"
-                  }
+                  placeholder={getLocalizedText(
+                    { en: "e.g., Configuration", ar: "مثال: التكوين" },
+                    lang
+                  )}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 {errors.variants?.[variantTypeIndex]?.name?.ar && (
@@ -766,7 +928,7 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             <div className="variant-options mb-4">
               <div className="flex justify-between items-center mb-2">
                 <h5 className="text-base font-medium text-gray-700">
-                  {locale === "ar" ? "الخيارات" : "Options"}
+                  {getLocalizedText({ en: "Options", ar: "الخيارات" }, lang)}
                 </h5>
               </div>
               <VariantOptionsFieldArray
@@ -774,11 +936,12 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
                 variantTypeIndex={variantTypeIndex}
                 handleVariantImageUpload={handleVariantImageUpload}
                 removeVariantImage={removeVariantImage}
+                updateVariantImageAlt={updateVariantImageAlt}
                 uploadMutation={uploadMutation}
                 watch={watch}
                 register={register}
                 errors={errors}
-                locale={locale}
+                locale={lang}
               />
             </div>
           </div>
@@ -788,22 +951,28 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
       {/* Specifications Section */}
       <div className="mb-6 p-4 border border-dashed border-gray-300 rounded-md">
         <h3 className="text-lg font-semibold text-gray-700 mb-3">
-          Specifications
+          {getLocalizedText({ en: "Specifications", ar: "المواصفات" }, lang)}
         </h3>
         {specFields.map((spec, index) => (
           <div
             key={spec.id}
-            className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3 p-3 border border-gray-200 rounded-md bg-gray-50"
+            className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-3 p-3 border border-gray-200 rounded-md bg-gray-50 items-end"
           >
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">
-                Spec Name (EN)
+                {getLocalizedText(
+                  { en: "Spec Name (EN)", ar: "اسم المواصفة (الإنجليزية)" },
+                  lang
+                )}
               </label>
               <input
                 {...register(`specifications.${index}.name.en`, {
                   required: "Spec name (EN) is required",
                 })}
-                placeholder="e.g., Processor"
+                placeholder={getLocalizedText(
+                  { en: "e.g., Processor", ar: "مثال: المعالج" },
+                  lang
+                )}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
               />
               {errors.specifications?.[index]?.name?.en && (
@@ -812,15 +981,21 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
                 </p>
               )}
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">
-                Spec Name (AR)
+                {getLocalizedText(
+                  { en: "Spec Name (AR)", ar: "اسم المواصفة (العربية)" },
+                  lang
+                )}
               </label>
               <input
                 {...register(`specifications.${index}.name.ar`, {
                   required: "Spec name (AR) is required",
                 })}
-                placeholder="مثال: المعالج"
+                placeholder={getLocalizedText(
+                  { en: "e.g., Processor", ar: "مثال: المعالج" },
+                  lang
+                )}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
               />
               {errors.specifications?.[index]?.name?.ar && (
@@ -829,56 +1004,44 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
                 </p>
               )}
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">
-                Spec Value
+                {getLocalizedText(
+                  { en: "Spec Value (EN)", ar: "قيمة المواصفة (الإنجليزية)" },
+                  lang
+                )}
               </label>
               <input
-                {...register(`specifications.${index}.value`, {
+                {...register(`specifications.${index}.value.en`, {
                   required: "Spec value is required",
                 })}
                 placeholder="e.g., Snapdragon 8 Gen 3"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
               />
-              {errors.specifications?.[index]?.value && (
+              {errors.specifications?.[index]?.value?.en && (
                 <p className="text-red-500 text-xs mt-1">
-                  {errors.specifications[index].value.message}
+                  {errors.specifications[index].value.en.message}
                 </p>
               )}
             </div>
-            <div className="flex items-end gap-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Unit (EN)
-                </label>
-                <input
-                  {...register(`specifications.${index}.unit.en`)}
-                  placeholder="e.g., GHz"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Unit (AR)
-                </label>
-                <input
-                  {...register(`specifications.${index}.unit.ar`)}
-                  placeholder="مثال: جيجاهرتز"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
-                />
-              </div>
-              <label className="block text-sm font-medium text-gray-700 flex items-center mt-auto">
-                <input
-                  type="checkbox"
-                  {...register(`specifications.${index}.isFilterable`)}
-                  className="rounded text-indigo-600 focus:ring-indigo-500 mr-2"
-                />
-                Filterable
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">
+                {getLocalizedText(
+                  { en: "Spec Value (AR)", ar: "قيمة المواصفة (العربية)" },
+                  lang
+                )}
               </label>
+              <input
+                {...register(`specifications.${index}.value.ar`)}
+                placeholder="مثال: سنابدراجون 8 الجيل 3"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"
+              />
+            </div>
+            <div className="flex items-end">
               <button
                 type="button"
                 onClick={() => removeSpec(index)}
-                className="px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 transition-colors mt-auto"
+                className="px-3 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 transition-colors"
               >
                 &times;
               </button>
@@ -890,14 +1053,15 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
           onClick={() =>
             appendSpec({
               name: { en: "", ar: "" },
-              value: "",
-              unit: { en: "", ar: "" },
-              isFilterable: false,
+              value: { en: "", ar: "" },
             })
           }
           className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md shadow-sm hover:bg-indigo-700 transition-colors"
         >
-          Add Specification
+          {getLocalizedText(
+            { en: "Add Specification", ar: "إضافة مواصفة" },
+            lang
+          )}
         </button>
       </div>
 
@@ -909,15 +1073,12 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
             {...register("isFeatured")}
             className="rounded text-indigo-600 focus:ring-indigo-500"
           />
-          <span className="ml-2">Featured Product</span>
-        </label>
-        <label className="inline-flex items-center text-sm font-medium text-gray-700">
-          <input
-            type="checkbox"
-            {...register("isActive")}
-            className="rounded text-indigo-600 focus:ring-indigo-500"
-          />
-          <span className="ml-2">Active Product</span>
+          <span className="ml-2">
+            {getLocalizedText(
+              { en: "Featured Product", ar: "منتج مميز" },
+              lang
+            )}
+          </span>
         </label>
       </div>
 
@@ -926,13 +1087,23 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
         disabled={isFormSubmitting}
         className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isFormSubmitting ? "Saving..." : "Save Product"}
+        {isFormSubmitting
+          ? getLocalizedText({ en: "Saving...", ar: "جاري الحفظ..." }, lang)
+          : getLocalizedText({ en: "Save Product", ar: "حفظ المنتج" }, lang)}
       </button>
 
       {/* Global Form Errors */}
       {Object.keys(errors).length > 0 && (
         <div className="mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
-          <h4 className="font-bold">Please correct the following errors:</h4>
+          <h4 className="font-bold">
+            {getLocalizedText(
+              {
+                en: "Please correct the following errors:",
+                ar: "يرجى تصحيح الأخطاء التالية:",
+              },
+              lang
+            )}
+          </h4>
           <ul className="list-disc list-inside mt-2">
             {Object.keys(errors).map((key) => {
               const error = errors[key];
@@ -956,12 +1127,82 @@ const ProductCreationForm = ({ defaultValues, onSubmitSuccess }) => {
   );
 };
 
+const ImagePreview = ({ img, onRemove, onAltTextChange, lang }) => {
+  if (!img || !img.url) return null;
+
+  const altText = (img && typeof img.altText === "object" && img.altText) || {
+    en: "",
+    ar: "",
+  };
+  const isVideo = img.url.match(/\.(mp4|mov|avi)$/i);
+
+  const getLocalizedText = (obj, lang, fallback = "") => {
+    if (!obj) return fallback;
+    if (typeof obj === "string") return obj;
+    if (typeof obj === "object" && obj !== null) {
+      if (obj[lang] && typeof obj[lang] === "string" && obj[lang].trim())
+        return obj[lang].trim();
+      if (obj.en && typeof obj.en === "string" && obj.en.trim())
+        return obj.en.trim();
+      if (obj.ar && typeof obj.ar === "string" && obj.ar.trim())
+        return obj.ar.trim();
+    }
+    return fallback;
+  };
+
+  return (
+    <div className="relative group overflow-hidden rounded-md shadow-sm border border-gray-200 w-32">
+      {isVideo ? (
+        <video
+          src={img.url}
+          controls
+          className="w-full h-24 object-cover"
+        ></video>
+      ) : (
+        <img
+          src={img.url}
+          alt={getLocalizedText(altText, lang)}
+          className="w-full h-24 object-cover"
+        />
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        &times;
+      </button>
+      <div className="p-1">
+        <label className="block text-xs font-medium text-gray-600">
+          Alt (EN)
+        </label>
+        <input
+          type="text"
+          value={altText.en || ""}
+          onChange={(e) => onAltTextChange("en", e.target.value)}
+          className="w-full text-xs p-1 border rounded"
+        />
+        <label className="block text-xs font-medium text-gray-600 mt-1">
+          Alt (AR)
+        </label>
+        <input
+          type="text"
+          value={altText.ar || ""}
+          onChange={(e) => onAltTextChange("ar", e.target.value)}
+          className="w-full text-xs p-1 border rounded"
+        />
+      </div>
+    </div>
+  );
+};
+
 // --- Nested Component for Variant Options ---
 const VariantOptionsFieldArray = ({
   control,
   variantTypeIndex,
   handleVariantImageUpload,
   removeVariantImage,
+  updateVariantImageAlt,
   uploadMutation,
   watch,
   register,
@@ -979,67 +1220,6 @@ const VariantOptionsFieldArray = ({
 
   const watchOptionFields = watch(`variants.${variantTypeIndex}.options`) || [];
 
-  const renderVariantImage = (img, imgIndex, variantTypeIndex, optionIndex) => {
-    if (!img || !img.url) return null;
-
-    const altText = (img && typeof img.altText === "object" && img.altText) || {
-      en: "",
-      ar: "",
-    };
-
-    return (
-      <div
-        key={img.url + imgIndex}
-        className="relative group overflow-hidden rounded-md shadow-sm border border-gray-200"
-      >
-        {img.url.match(/\.(mp4|mov|avi)$/i) ? (
-          <video
-            src={img.url}
-            controls
-            className="w-20 h-20 object-cover"
-          ></video>
-        ) : (
-          <img
-            src={img.url}
-            alt={altText[locale] || ""}
-            className="w-20 h-20 object-cover"
-          />
-        )}
-        <button
-          type="button"
-          onClick={() =>
-            removeVariantImage(variantTypeIndex, optionIndex, imgIndex)
-          }
-          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          &times;
-        </button>
-        <div className="p-1">
-          <label className="block text-xs font-medium text-gray-600">
-            {locale === "ar" ? "نص بديل (إنجليزي)" : "Alt Text (EN)"}
-          </label>
-          <input
-            type="text"
-            {...register(
-              `variants.${variantTypeIndex}.options.${optionIndex}.variantImages.${imgIndex}.altText.en`
-            )}
-            className="w-full text-xs p-0.5 border rounded"
-          />
-          <label className="block text-xs font-medium text-gray-600 mt-1">
-            {locale === "ar" ? "نص بديل (عربي)" : "Alt Text (AR)"}
-          </label>
-          <input
-            type="text"
-            {...register(
-              `variants.${variantTypeIndex}.options.${optionIndex}.variantImages.${imgIndex}.altText.ar`
-            )}
-            className="w-full text-xs p-0.5 border rounded"
-          />
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
       {optionFields.map((option, optionIndex) => {
@@ -1056,9 +1236,8 @@ const VariantOptionsFieldArray = ({
           >
             <div className="flex justify-between items-center mb-4">
               <h5 className="text-md font-medium text-gray-800">
-                {locale === "ar"
-                  ? `الخيار #${optionIndex + 1}`
-                  : `Option #${optionIndex + 1}`}
+                {getLocalizedText({ en: "Option #", ar: "الخيار #" }, locale)}
+                {optionIndex + 1}
               </h5>
               <button
                 type="button"
@@ -1077,36 +1256,40 @@ const VariantOptionsFieldArray = ({
                     clipRule="evenodd"
                   />
                 </svg>
-                {locale === "ar" ? "حذف" : "Remove"}
+                {getLocalizedText({ en: "Remove", ar: "حذف" }, locale)}
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              {/* إذا كان الخيار الأول، أظهر جميع الحقول */}
-              {optionIndex === 0 && (
-                <>
-                  {/* value.en */}
+              <div className="col-span-2">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-semibold text-slate-700">
-                      {locale === "ar"
-                        ? "قيمة الخيار (إنجليزي)"
-                        : "Option Value (EN)"}
+                      {getLocalizedText(
+                        {
+                          en: "Option Value (EN)",
+                          ar: "قيمة الخيار (إنجليزي)",
+                        },
+                        locale
+                      )}
                     </label>
                     <input
                       {...register(
                         `variants.${variantTypeIndex}.options.${optionIndex}.value.en`,
                         {
-                          required:
-                            locale === "ar"
-                              ? "قيمة الخيار مطلوبة"
-                              : "Option value is required",
+                          required: getLocalizedText(
+                            {
+                              en: "Option value is required",
+                              ar: "قيمة الخيار مطلوبة",
+                            },
+                            locale
+                          ),
                         }
                       )}
-                      placeholder={
-                        locale === "ar"
-                          ? "مثال: أحمر - 256 جيجابايت"
-                          : "e.g., Red - 256GB"
-                      }
+                      placeholder={getLocalizedText(
+                        { en: "e.g., Red - 256GB", ar: "مثال: أحمر - 256GB" },
+                        locale
+                      )}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     {errors.variants?.[variantTypeIndex]?.options?.[optionIndex]
@@ -1119,28 +1302,30 @@ const VariantOptionsFieldArray = ({
                       </p>
                     )}
                   </div>
-                  {/* value.ar */}
                   <div>
                     <label className="text-sm font-semibold text-slate-700">
-                      {locale === "ar"
-                        ? "قيمة الخيار (عربي)"
-                        : "Option Value (AR)"}
+                      {getLocalizedText(
+                        { en: "Option Value (AR)", ar: "قيمة الخيار (عربي)" },
+                        locale
+                      )}
                     </label>
                     <input
                       {...register(
                         `variants.${variantTypeIndex}.options.${optionIndex}.value.ar`,
                         {
-                          required:
-                            locale === "ar"
-                              ? "قيمة الخيار مطلوبة"
-                              : "Option value is required",
+                          required: getLocalizedText(
+                            {
+                              en: "Option value is required",
+                              ar: "قيمة الخيار مطلوبة",
+                            },
+                            locale
+                          ),
                         }
                       )}
-                      placeholder={
-                        locale === "ar"
-                          ? "مثال: أحمر - 256 جيجابايت"
-                          : "e.g., Red - 256GB"
-                      }
+                      placeholder={getLocalizedText(
+                        { en: "e.g., Red - 256GB", ar: "مثال: أحمر - 256GB" },
+                        locale
+                      )}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     {errors.variants?.[variantTypeIndex]?.options?.[optionIndex]
@@ -1153,256 +1338,303 @@ const VariantOptionsFieldArray = ({
                       </p>
                     )}
                   </div>
-                  {/* colorName.en */}
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">
-                      {locale === "ar"
-                        ? "اسم اللون (إنجليزي)"
-                        : "Color Name (EN)"}
-                    </label>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 col-span-2">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText(
+                      { en: "Color Name (EN)", ar: "اسم اللون (إنجليزي)" },
+                      locale
+                    )}
+                  </label>
+                  <input
+                    {...register(
+                      `variants.${variantTypeIndex}.options.${optionIndex}.colorName.en`
+                    )}
+                    placeholder={getLocalizedText(
+                      { en: "e.g., Space Gray", ar: "مثال: رمادي فلكي" },
+                      locale
+                    )}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText(
+                      { en: "Color Name (AR)", ar: "اسم اللون (عربي)" },
+                      locale
+                    )}
+                  </label>
+                  <input
+                    {...register(
+                      `variants.${variantTypeIndex}.options.${optionIndex}.colorName.ar`
+                    )}
+                    placeholder={getLocalizedText(
+                      { en: "e.g., Space Gray", ar: "مثال: رمادي فلكي" },
+                      locale
+                    )}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText(
+                      { en: "Color Hex Code", ar: "رمز اللون" },
+                      locale
+                    )}
+                  </label>
+                  <Controller
+                    name={`variants.${variantTypeIndex}.options.${optionIndex}.colorHex`}
+                    control={control}
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          {...field}
+                          className="p-1 h-10 w-14 block bg-white border border-gray-300 cursor-pointer rounded-lg"
+                        />
+                        <input
+                          type="text"
+                          {...field}
+                          placeholder="#FFFFFF"
+                          className="block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                      </div>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* حقل SKU */}
+              <div className="grid grid-cols-1 gap-4 col-span-2">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText(
+                      { en: "SKU (Optional)", ar: "رمز المنتج SKU (اختياري)" },
+                      locale
+                    )}
+                  </label>
+                  <input
+                    {...register(
+                      `variants.${variantTypeIndex}.options.${optionIndex}.sku`
+                    )}
+                    placeholder={getLocalizedText(
+                      { en: "e.g., SKU12345", ar: "مثال: SKU12345" },
+                      locale
+                    )}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 col-span-2">
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText({ en: "Storage", ar: "التخزين" }, locale)}
+                  </label>
+                  <input
+                    {...register(
+                      `variants.${variantTypeIndex}.options.${optionIndex}.storage`
+                    )}
+                    placeholder={getLocalizedText(
+                      { en: "e.g., 256GB", ar: "مثال: 256GB" },
+                      locale
+                    )}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText(
+                      { en: "RAM", ar: "الذاكرة العشوائية" },
+                      locale
+                    )}
+                  </label>
+                  <input
+                    {...register(
+                      `variants.${variantTypeIndex}.options.${optionIndex}.ram`
+                    )}
+                    placeholder={getLocalizedText(
+                      { en: "e.g., 8GB", ar: "مثال: 8GB" },
+                      locale
+                    )}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText({ en: "Price", ar: "السعر" }, locale)}
+                  </label>
+                  <div className="relative mt-1">
                     <input
+                      type="number"
+                      step="0.01"
                       {...register(
-                        `variants.${variantTypeIndex}.options.${optionIndex}.colorName.en`
+                        `variants.${variantTypeIndex}.options.${optionIndex}.price`,
+                        {
+                          required: getLocalizedText(
+                            { en: "Price is required", ar: "السعر مطلوب" },
+                            locale
+                          ),
+                          valueAsNumber: true,
+                          min: {
+                            value: 0,
+                            message: getLocalizedText(
+                              {
+                                en: "Price cannot be negative",
+                                ar: "السعر لا يمكن أن يكون سالباً",
+                              },
+                              locale
+                            ),
+                          },
+                        }
                       )}
-                      placeholder={
-                        locale === "ar"
-                          ? "مثال: رمادي فلكي"
-                          : "e.g., Space Gray"
-                      }
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="999.99"
+                      className="block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
-                  {/* colorName.ar */}
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">
-                      {locale === "ar" ? "اسم اللون (عربي)" : "Color Name (AR)"}
-                    </label>
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText(
+                      { en: "Discount (%)", ar: "الخصم (%)" },
+                      locale
+                    )}
+                  </label>
+                  <div className="relative mt-1">
                     <input
+                      type="number"
                       {...register(
-                        `variants.${variantTypeIndex}.options.${optionIndex}.colorName.ar`
+                        `variants.${variantTypeIndex}.options.${optionIndex}.discount`,
+                        { valueAsNumber: true }
                       )}
-                      placeholder={
-                        locale === "ar"
-                          ? "مثال: رمادي فلكي"
-                          : "e.g., Space Gray"
-                      }
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="10"
+                      className="block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
-                  {/* colorHex */}
-                  <div>
-                    <label className="text-sm font-semibold text-slate-700">
-                      {locale === "ar" ? "رمز اللون" : "Color Hex Code"}
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        {...register(
-                          `variants.${variantTypeIndex}.options.${optionIndex}.colorHex`
-                        )}
-                        placeholder="#RRGGBB"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                      {watchOptionFields?.[optionIndex]?.colorHex &&
-                        watchOptionFields[optionIndex].colorHex.match(
-                          /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/
-                        ) && (
-                          <div
-                            style={{
-                              backgroundColor:
-                                watchOptionFields[optionIndex].colorHex,
-                              width: "40px",
-                              height: "40px",
-                              borderRadius: "8px",
-                              border: "1px solid #ccc",
-                              marginTop: "4px",
-                            }}
-                          ></div>
-                        )}
-                    </div>
-                  </div>
-                </>
-              )}
-              {/* الحقول المشتركة للجميع */}
-              <div>
-                <label className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "التخزين" : "Storage"}
-                </label>
-                <input
-                  {...register(
-                    `variants.${variantTypeIndex}.options.${optionIndex}.storage`
-                  )}
-                  placeholder={
-                    locale === "ar" ? "مثال: 256 جيجابايت" : "e.g., 256GB"
-                  }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "الذاكرة العشوائية" : "RAM"}
-                </label>
-                <input
-                  {...register(
-                    `variants.${variantTypeIndex}.options.${optionIndex}.ram`
-                  )}
-                  placeholder={
-                    locale === "ar" ? "مثال: 8 جيجابايت" : "e.g., 8GB"
-                  }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "السعر" : "Price"}
-                </label>
-                <div className="relative mt-1">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
-                    $
-                  </span>
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">
+                    {getLocalizedText({ en: "Stock", ar: "المخزون" }, locale)}
+                  </label>
                   <input
                     type="number"
-                    step="0.01"
                     {...register(
-                      `variants.${variantTypeIndex}.options.${optionIndex}.price`,
+                      `variants.${variantTypeIndex}.options.${optionIndex}.stock`,
                       {
-                        required:
-                          locale === "ar" ? "السعر مطلوب" : "Price is required",
+                        required: getLocalizedText(
+                          { en: "Stock is required", ar: "المخزون مطلوب" },
+                          locale
+                        ),
                         valueAsNumber: true,
                         min: {
                           value: 0,
-                          message:
-                            locale === "ar"
-                              ? "السعر لا يمكن أن يكون سالباً"
-                              : "Price cannot be negative",
+                          message: getLocalizedText(
+                            {
+                              en: "Stock cannot be negative",
+                              ar: "المخزون لا يمكن أن يكون سالباً",
+                            },
+                            locale
+                          ),
                         },
                       }
                     )}
-                    className="pl-7 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="100"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
-                {errors.variants?.[variantTypeIndex]?.options?.[optionIndex]
-                  ?.price && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {
-                      errors.variants[variantTypeIndex].options[optionIndex]
-                        .price.message
-                    }
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "الخصم (%)" : "Discount (%)"}
-                </label>
-                <div className="relative mt-1">
-                  <input
-                    type="number"
-                    step="1"
-                    {...register(
-                      `variants.${variantTypeIndex}.options.${optionIndex}.discount`,
-                      { valueAsNumber: true, min: 0, max: 100 }
-                    )}
-                    className="pl-7 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500">
-                    %
-                  </span>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-slate-700">
-                  {locale === "ar" ? "المخزون" : "Stock"}
-                </label>
-                <input
-                  type="number"
-                  {...register(
-                    `variants.${variantTypeIndex}.options.${optionIndex}.stock`,
-                    {
-                      required:
-                        locale === "ar" ? "المخزون مطلوب" : "Stock is required",
-                      valueAsNumber: true,
-                      min: {
-                        value: 0,
-                        message:
-                          locale === "ar"
-                            ? "المخزون لا يمكن أن يكون سالباً"
-                            : "Stock cannot be negative",
-                      },
-                    }
-                  )}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                />
-                {errors.variants?.[variantTypeIndex]?.options?.[optionIndex]
-                  ?.stock && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {
-                      errors.variants[variantTypeIndex].options[optionIndex]
-                        .stock.message
-                    }
-                  </p>
-                )}
               </div>
             </div>
 
-            {/* Variant Images Upload */}
-            <div className="mb-4">
-              <h6 className="text-sm font-medium text-gray-700 mb-2">
-                {locale === "ar" ? "صور المتغير" : "Variant Images"}
-              </h6>
-              <div className="flex items-center gap-4">
-                {optionIndex === 0 && (
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) =>
-                      handleVariantImageUpload(e, variantTypeIndex, optionIndex)
-                    }
-                    accept="image/*,video/*"
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    disabled={uploadMutation.isPending}
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mb-4">
+                <h6 className="text-sm font-medium text-gray-700 mb-2">
+                  {getLocalizedText(
+                    { en: "Variant Images", ar: "صور المتغير" },
+                    locale
+                  )}
+                </h6>
+                <div className="flex items-center gap-4">
+                  {optionIndex === 0 && (
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(e) =>
+                        handleVariantImageUpload(
+                          e,
+                          variantTypeIndex,
+                          optionIndex
+                        )
+                      }
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                      disabled={uploadMutation.isPending}
+                    />
+                  )}
+                  {uploadMutation.isPending && (
+                    <div className="flex items-center gap-2 text-indigo-600">
+                      <svg
+                        className="animate-spin h-5 w-5"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      {getLocalizedText(
+                        { en: "Uploading...", ar: "جاري الرفع..." },
+                        locale
+                      )}
+                    </div>
+                  )}
+                </div>
+                {uploadMutation.isError && (
+                  <p className="text-red-500 mt-2">
+                    {getLocalizedText(
+                      { en: "Error uploading:", ar: "خطأ في الرفع:" },
+                      locale
+                    )}{" "}
+                    {uploadMutation.error.message}
+                  </p>
                 )}
-                {uploadMutation.isPending && (
-                  <div className="flex items-center gap-2 text-indigo-600">
-                    <svg
-                      className="animate-spin h-5 w-5"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    {locale === "ar" ? "جاري الرفع..." : "Uploading..."}
-                  </div>
-                )}
-              </div>
-              {uploadMutation.isError && (
-                <p className="text-red-500 mt-2">
-                  {locale === "ar" ? "خطأ في الرفع:" : "Error uploading:"}{" "}
-                  {uploadMutation.error.message}
-                </p>
-              )}
-              <div className="mt-3 flex flex-wrap gap-2">
-                {variantImages.map((img, imgIndex) =>
-                  renderVariantImage(
-                    img,
-                    imgIndex,
-                    variantTypeIndex,
-                    optionIndex
-                  )
-                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {variantImages.map((img, imgIndex) => (
+                    <ImagePreview
+                      key={img.public_id + imgIndex}
+                      img={img}
+                      index={imgIndex}
+                      onRemove={() =>
+                        removeVariantImage(
+                          variantTypeIndex,
+                          optionIndex,
+                          img.public_id
+                        )
+                      }
+                      onAltTextChange={(field, value) =>
+                        updateVariantImageAlt(
+                          variantTypeIndex,
+                          optionIndex,
+                          img.public_id,
+                          field,
+                          value
+                        )
+                      }
+                      lang={locale}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1435,7 +1667,7 @@ const VariantOptionsFieldArray = ({
             clipRule="evenodd"
           />
         </svg>
-        {locale === "ar" ? "إضافة خيار" : "Add Option"}
+        {getLocalizedText({ en: "Add Option", ar: "إضافة خيار" }, locale)}
       </button>
     </>
   );
