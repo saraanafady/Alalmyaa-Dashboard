@@ -1341,69 +1341,76 @@ const VariantOptionsFieldArray = ({
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4 col-span-2">
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">
-                    {getLocalizedText(
-                      { en: "Color Name (EN)", ar: "اسم اللون (إنجليزي)" },
-                      locale
-                    )}
-                  </label>
-                  <input
-                    {...register(
-                      `variants.${variantTypeIndex}.options.${optionIndex}.colorName.en`
-                    )}
-                    placeholder={getLocalizedText(
-                      { en: "e.g., Space Gray", ar: "مثال: رمادي فلكي" },
-                      locale
-                    )}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">
-                    {getLocalizedText(
-                      { en: "Color Name (AR)", ar: "اسم اللون (عربي)" },
-                      locale
-                    )}
-                  </label>
-                  <input
-                    {...register(
-                      `variants.${variantTypeIndex}.options.${optionIndex}.colorName.ar`
-                    )}
-                    placeholder={getLocalizedText(
-                      { en: "e.g., Space Gray", ar: "مثال: رمادي فلكي" },
-                      locale
-                    )}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">
-                    {getLocalizedText(
-                      { en: "Color Hex Code", ar: "رمز اللون" },
-                      locale
-                    )}
-                  </label>
-                  <Controller
-                    name={`variants.${variantTypeIndex}.options.${optionIndex}.colorHex`}
-                    control={control}
-                    render={({ field }) => (
-                      <div className="flex items-center gap-2 mt-1">
-                        <input
-                          type="color"
-                          {...field}
-                          className="p-1 h-10 w-14 block bg-white border border-gray-300 cursor-pointer rounded-lg"
-                        />
-                        <input
-                          type="text"
-                          {...field}
-                          placeholder="#FFFFFF"
-                          className="block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                      </div>
-                    )}
-                  />
-                </div>
+                {optionIndex === 0 && (
+                  <>
+                    <div>
+                      <label className="text-sm font-semibold text-slate-700">
+                        {getLocalizedText(
+                          {
+                            en: "Color Name (EN)",
+                            ar: "اسم اللون (إنجليزي)",
+                          },
+                          locale
+                        )}
+                      </label>
+                      <input
+                        {...register(
+                          `variants.${variantTypeIndex}.options.${optionIndex}.colorName.en`
+                        )}
+                        placeholder={getLocalizedText(
+                          { en: "e.g., Space Gray", ar: "مثال: رمادي فلكي" },
+                          locale
+                        )}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-slate-700">
+                        {getLocalizedText(
+                          { en: "Color Name (AR)", ar: "اسم اللون (عربي)" },
+                          locale
+                        )}
+                      </label>
+                      <input
+                        {...register(
+                          `variants.${variantTypeIndex}.options.${optionIndex}.colorName.ar`
+                        )}
+                        placeholder={getLocalizedText(
+                          { en: "e.g., Space Gray", ar: "مثال: رمادي فلكي" },
+                          locale
+                        )}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-slate-700">
+                        {getLocalizedText(
+                          { en: "Color Hex Code", ar: "رمز اللون" },
+                          locale
+                        )}
+                      </label>
+                      <Controller
+                        name={`variants.${variantTypeIndex}.options.${optionIndex}.colorHex`}
+                        control={control}
+                        render={({ field }) => (
+                          <div className="flex items-center gap-2 mt-1">
+                            <input
+                              type="color"
+                              {...field}
+                              className="p-1 h-10 w-14 block bg-white border border-gray-300 cursor-pointer rounded-lg"
+                            />
+                            <input
+                              type="text"
+                              {...field}
+                              placeholder="#FFFFFF"
+                              className="block w-full rounded-md border-gray-300 shadow-sm p-2 border focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                          </div>
+                        )}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* حقل SKU */}
