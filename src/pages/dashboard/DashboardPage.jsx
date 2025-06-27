@@ -19,6 +19,7 @@ import {
   FiUsers,
   FiPackage,
 } from "react-icons/fi";
+import { useTranslation } from "../../hooks/useTranslation";
 
 // Mock data for charts
 const salesData = [
@@ -40,14 +41,14 @@ const orderData = [
   { name: "Sun", value: 27 },
 ];
 
-const StatCard = ({ title, value, icon: Icon, trend }) => (
+const StatCard = ({ title, value, icon: Icon, trend, t }) => (
   <div className="bg-white rounded-lg shadow p-6">
     <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-600 ">{title}</p>
+      <div className="flex-1">
+        <p className="text-sm font-medium text-gray-600">{title}</p>
         <p className="text-2xl font-semibold text-gray-900 mt-2">{value}</p>
       </div>
-      <div className="p-3 bg-primary-100 rounded-full">
+      <div className="p-3 bg-primary-100 rounded-full ml-4 rtl:ml-0 rtl:mr-4">
         <Icon className="w-6 h-6 text-primary-600" />
       </div>
     </div>
@@ -58,16 +59,18 @@ const StatCard = ({ title, value, icon: Icon, trend }) => (
             trend > 0 ? "text-green-600" : "text-red-600"
           }`}
         >
-          <FiTrendingUp className="w-4 h-4 mr-1" />
+          <FiTrendingUp className="w-4 h-4 mr-1 rtl:mr-0 rtl:ml-1" />
           {trend}%
         </span>
-        <span className="text-gray-500 ml-2">vs last month</span>
+        <span className="text-gray-500 ml-2 rtl:ml-0 rtl:mr-2">{t("dashboardPage.vsLastMonth")}</span>
       </div>
     )}
   </div>
 );
 
 const DashboardPage = () => {
+  const { t } = useTranslation();
+
   const recentOrders = [
     {
       id: 1,
@@ -92,13 +95,22 @@ const DashboardPage = () => {
     },
   ];
 
+  const getStatusDisplay = (status) => {
+    const statusMap = {
+      completed: t("dashboardPage.completed"),
+      pending: t("dashboardPage.pending"),
+      processing: t("dashboardPage.processing"),
+    };
+    return statusMap[status] || status;
+  };
+
   const orderColumns = [
-    { key: "id", title: "Order ID" },
-    { key: "customer", title: "Customer" },
-    { key: "amount", title: "Amount" },
+    { key: "id", title: t("dashboardPage.orderId") },
+    { key: "customer", title: t("dashboardPage.customer") },
+    { key: "amount", title: t("dashboardPage.amount") },
     {
       key: "status",
-      title: "Status",
+      title: t("dashboardPage.status"),
       render: (row) => (
         <Badge
           variant={
@@ -109,42 +121,46 @@ const DashboardPage = () => {
               : "info"
           }
         >
-          {row.status}
+          {getStatusDisplay(row.status)}
         </Badge>
       ),
     },
-    { key: "date", title: "Date" },
+    { key: "date", title: t("dashboardPage.date") },
   ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+    <div className="space-y-6 rtl:space-y-reverse">
+      <h1 className="text-2xl font-semibold text-gray-900">{t("dashboardPage.title")}</h1>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Total Sales"
+          title={t("dashboardPage.totalSales")}
           value="$24,500"
           icon={FiTrendingUp}
           trend={12.5}
+          t={t}
         />
         <StatCard
-          title="Total Orders"
+          title={t("dashboardPage.totalOrders")}
           value="1,234"
           icon={FiShoppingCart}
           trend={8.2}
+          t={t}
         />
         <StatCard
-          title="Total Customers"
+          title={t("dashboardPage.totalCustomers")}
           value="856"
           icon={FiUsers}
           trend={5.7}
+          t={t}
         />
         <StatCard
-          title="Total Products"
+          title={t("dashboardPage.totalProducts")}
           value="432"
           icon={FiPackage}
           trend={3.2}
+          t={t}
         />
       </div>
       {/* Charts */}
@@ -152,7 +168,7 @@ const DashboardPage = () => {
         {/* Sales Chart */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Sales Overview
+            {t("dashboardPage.salesOverview")}
           </h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -176,7 +192,7 @@ const DashboardPage = () => {
         {/* Orders Chart */}
         <div className="bg-white  rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900  mb-4">
-            Daily Orders
+            {t("dashboardPage.dailyOrders")}
           </h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -193,23 +209,23 @@ const DashboardPage = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card title="Total Sales" className="text-center">
+        <Card title={t("dashboardPage.totalSales")} className="text-center">
           <p className="text-3xl font-bold text-blue-600">$12,345</p>
-          <p className="text-sm text-gray-500">Last 30 days</p>
+          <p className="text-sm text-gray-500">{t("dashboardPage.last30Days")}</p>
         </Card>
 
-        <Card title="Total Orders" className="text-center">
+        <Card title={t("dashboardPage.totalOrders")} className="text-center">
           <p className="text-3xl font-bold text-green-600">156</p>
-          <p className="text-sm text-gray-500">Last 30 days</p>
+          <p className="text-sm text-gray-500">{t("dashboardPage.last30Days")}</p>
         </Card>
 
-        <Card title="Total Customers" className="text-center">
+        <Card title={t("dashboardPage.totalCustomers")} className="text-center">
           <p className="text-3xl font-bold text-purple-600">89</p>
-          <p className="text-sm text-gray-500">Active customers</p>
+          <p className="text-sm text-gray-500">{t("dashboardPage.activeCustomers")}</p>
         </Card>
       </div>
 
-      <Card title="Recent Orders">
+      <Card title={t("dashboardPage.recentOrders")}>
         <Table
           columns={orderColumns}
           data={recentOrders}

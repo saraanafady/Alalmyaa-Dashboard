@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { FiEdit2, FiTrash2, FiPlus, FiX } from "react-icons/fi";
 import toast from "react-hot-toast";
 import axios from "axios";
 import { base_url } from "../../constants/axiosConfig";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useTranslation } from "../../hooks/useTranslation";
 
 const BrandsPage = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -14,6 +16,21 @@ const BrandsPage = () => {
   const [brandToDelete, setBrandToDelete] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Function to get localized text from brand data
+  const getLocalizedText = (obj, lang, fallback = "") => {
+    if (!obj) return fallback;
+    if (typeof obj === "string") return obj;
+    if (typeof obj === "object" && obj !== null) {
+      if (obj[lang] && typeof obj[lang] === "string" && obj[lang].trim())
+        return obj[lang].trim();
+      if (obj.en && typeof obj.en === "string" && obj.en.trim())
+        return obj.en.trim();
+      if (obj.ar && typeof obj.ar === "string" && obj.ar.trim())
+        return obj.ar.trim();
+    }
+    return fallback;
+  };
 
   useEffect(() => {
     if (isModalOpen) {
@@ -38,20 +55,26 @@ const BrandsPage = () => {
     queryFn: fetchBrands,
   });
 
-  const filteredBrands = brands.filter(
-    (brand) =>
-      brand.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      brand.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredBrands = useMemo(() => {
+    return brands.filter((brand) => {
+      const searchLower = searchTerm.toLowerCase();
+      const currentLang = localStorage.getItem("language") || "en";
+      return (
+        getLocalizedText(brand.name, currentLang, "").toLowerCase().includes(searchLower) ||
+        getLocalizedText(brand.description, currentLang, "").toLowerCase().includes(searchLower) ||
+        (brand.websiteUrl || "").toLowerCase().includes(searchLower)
+      );
+    });
+  }, [brands, searchTerm]);
 
   const deleteBrandMutation = useMutation({
     mutationFn: (id) => axios.delete(`${base_url}/api/brand/${id}`),
     onSuccess: () => {
-      toast.success("Brand deleted successfully");
+      toast.success(t("brandsPage.brandDeletedSuccess"));
       queryClient.invalidateQueries(["brands"]);
     },
     onError: (err) => {
-      toast.error("Failed to delete brand");
+      toast.error(err.response?.data?.message || t("brandsPage.brandDeletedError"));
       console.error(err);
     },
   });
@@ -60,31 +83,36 @@ const BrandsPage = () => {
     mutationFn: ({ id, newStatus }) =>
       axios.patch(`${base_url}/api/brand/${id}/status`, { status: newStatus }),
     onSuccess: () => {
-      toast.success("Status updated successfully");
+      toast.success(t("brandsPage.statusUpdatedSuccess"));
       queryClient.invalidateQueries(["brands"]);
     },
     onError: (err) => {
-      toast.error("Failed to update status");
+      toast.error(err.response?.data?.message || t("brandsPage.statusUpdatedError"));
       console.error(err);
     },
   });
 
   const addBrandMutation = useMutation({
-    mutationFn: (formData) =>
-      axios.post(`${base_url}/api/brand`, formData, {
+    mutationFn: (formData) => {
+      console.log("Sending add data:", formData);
+      return axios.post(`${base_url}/api/brand`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
-      }),
+      });
+    },
     onSuccess: () => {
-      toast.success("Brand added successfully");
+      toast.success(t("brandsPage.brandAddedSuccess"));
       queryClient.invalidateQueries(["brands"]);
     },
     onError: (err) => {
+      console.error("Add error:", err.response?.data);
+      console.error("Full add error:", err);
       handleFormError(err);
     },
   });
 
   const updateBrandMutation = useMutation({
     mutationFn: ({ id, formData }) => {
+      console.log("Sending update data:", formData);
       return axios.patch(`${base_url}/api/brand/${id}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -92,20 +120,21 @@ const BrandsPage = () => {
       });
     },
     onSuccess: () => {
-      toast.success("Brand updated successfully");
+      toast.success(t("brandsPage.brandUpdatedSuccess"));
       queryClient.invalidateQueries(["brands"]);
     },
     onError: (err) => {
       console.error("Update error:", err.response?.data);
+      console.error("Full error:", err);
       handleFormError(err);
     },
   });
 
   const handleFormError = (err) => {
     if (err.response?.status === 413) {
-      toast.error("Image file is too large. Please choose a smaller file.");
+      toast.error(t("brandsPage.fileSizeError"));
     } else {
-      toast.error("Failed to submit brand");
+      toast.error(err.response?.data?.message || t("brandsPage.submitError"));
     }
     console.error(err);
   };
@@ -115,19 +144,30 @@ const BrandsPage = () => {
     setIsSubmitting(true);
     const formData = new FormData();
 
-    const name = e.target.name.value;
-    const description = e.target.description.value;
+    const nameEn = e.target.nameEn.value;
+    const nameAr = e.target.nameAr.value;
+    const descriptionEn = e.target.descriptionEn.value;
+    const descriptionAr = e.target.descriptionAr.value;
     const website = e.target.website.value;
     const status = e.target.status.value;
     const logoFile = e.target.logo.files[0];
 
-    formData.append("name", name);
-    formData.append("description", description);
+    // Send multilingual data as separate fields that the server can parse
+    formData.append("name[en]", nameEn);
+    formData.append("name[ar]", nameAr);
+    formData.append("description[en]", descriptionEn);
+    formData.append("description[ar]", descriptionAr);
     formData.append("websiteUrl", website);
     formData.append("status", status);
 
     if (logoFile) {
       formData.append("logoUrl", logoFile);
+    }
+
+    // Debug: Log form data contents
+    console.log("Form data contents:");
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value);
     }
 
     try {
@@ -144,7 +184,7 @@ const BrandsPage = () => {
       setImagePreview(null);
     } catch (error) {
       console.error("Error submitting form:", error);
-      toast.error(error.response?.data?.message || "Failed to update brand");
+      toast.error(error.response?.data?.message || t("brandsPage.updateError"));
     } finally {
       setIsSubmitting(false);
     }
@@ -155,14 +195,14 @@ const BrandsPage = () => {
     if (file) {
       // Check file size (limit to 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        toast.error("File size must be less than 5MB");
+        toast.error(t("brandsPage.fileSizeLimit"));
         e.target.value = "";
         return;
       }
 
       // Check file type
       if (!file.type.startsWith("image/")) {
-        toast.error("Please select an image file");
+        toast.error(t("brandsPage.selectImageFile"));
         e.target.value = "";
         return;
       }
@@ -200,7 +240,9 @@ const BrandsPage = () => {
   if (isError) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600">Error loading brands: {error?.message}</p>
+        <p className="text-red-600">
+          {t("brandsPage.errorLoadingBrands")}: {error?.message}
+        </p>
       </div>
     );
   }
@@ -208,7 +250,9 @@ const BrandsPage = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-gray-900">Brands</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">
+          {t("brandsPage.title")}
+        </h1>
         <button
           onClick={() => {
             setSelectedBrand(null);
@@ -216,8 +260,8 @@ const BrandsPage = () => {
           }}
           className="inline-flex items-center px-4 py-2 bg-primary-600 text-black bg-white border border-transparent rounded-md shadow-sm text-sm font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
-          <FiPlus className="w-5 h-5 mr-2" />
-          Add Brand
+          <FiPlus className="w-5 h-5 mx-2" />
+          {t("brandsPage.addBrand")}
         </button>
       </div>
 
@@ -225,7 +269,7 @@ const BrandsPage = () => {
       <div className="flex-1">
         <input
           type="text"
-          placeholder="Search brands..."
+          placeholder={t("brandsPage.searchPlaceholder")}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white"
@@ -238,100 +282,107 @@ const BrandsPage = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Brand
+                {t("brandsPage.brand")}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
+                {t("brandsPage.description")}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Website
+                {t("brandsPage.website")}
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                {t("brandsPage.status")}
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
+                {t("brandsPage.actions")}
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredBrands?.map((brand) => (
-              <tr key={brand._id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {brand.logoUrl && (
-                      <img
-                        src={brand.logoUrl}
-                        alt={brand.name}
-                        className="h-10 w-10 rounded-full mr-3 object-cover"
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                        }}
-                      />
-                    )}
-                    <div className="text-sm font-medium text-gray-900">
-                      {brand.name}
+            {filteredBrands?.map((brand) => {
+              const currentLang = localStorage.getItem("language") || "en";
+              return (
+                <tr key={brand._id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                      {brand.logoUrl && (
+                        <img
+                          src={brand.logoUrl}
+                          alt={getLocalizedText(brand.name, currentLang)}
+                          className="h-10 w-10 rounded-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      )}
+                      <div className="text-sm font-medium text-gray-900">
+                        {getLocalizedText(brand.name, currentLang)}
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-500 max-w-xs truncate">
-                    {brand.description}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {brand.websiteUrl && (
-                    <a
-                      href={brand.websiteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary-600 hover:text-primary-900 text-sm"
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-500 max-w-xs truncate">
+                      {getLocalizedText(brand.description, currentLang)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {brand.websiteUrl && (
+                      <a
+                        href={brand.websiteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 hover:text-primary-900 text-sm"
+                      >
+                        {brand.websiteUrl}
+                      </a>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <select
+                      value={brand.status}
+                      onChange={(e) =>
+                        statusChangeMutation.mutate({
+                          id: brand._id,
+                          newStatus: e.target.value,
+                        })
+                      }
+                      className={`text-sm rounded-full px-2 py-1 font-semibold border-0 ${
+                        brand.status === "active"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
                     >
-                      {brand.websiteUrl}
-                    </a>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <select
-                    value={brand.status}
-                    onChange={(e) =>
-                      statusChangeMutation.mutate({
-                        id: brand._id,
-                        newStatus: e.target.value,
-                      })
-                    }
-                    className={`text-sm rounded-full px-2 py-1 font-semibold border-0 ${
-                      brand.status === "active"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => {
-                      setSelectedBrand(brand);
-                      setIsModalOpen(true);
-                    }}
-                    className="text-primary-600 hover:text-primary-900 mr-4"
-                  >
-                    <FiEdit2 className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setBrandToDelete(brand);
-                      setIsDeleteModalOpen(true);
-                    }}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <FiTrash2 className="w-5 h-5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                      <option value="active">{t("brandsPage.active")}</option>
+                      <option value="inactive">{t("brandsPage.inactive")}</option>
+                    </select>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex space-x-2 rtl:space-x-reverse justify-end">
+                      <button
+                        onClick={() => {
+                          setSelectedBrand(brand);
+                          setIsModalOpen(true);
+                        }}
+                        className="text-primary-600 hover:text-primary-900"
+                        title={t("common.edit")}
+                      >
+                        <FiEdit2 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setBrandToDelete(brand);
+                          setIsDeleteModalOpen(true);
+                        }}
+                        className="text-red-600 hover:text-red-900"
+                        title={t("common.delete")}
+                      >
+                        <FiTrash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -353,13 +404,13 @@ const BrandsPage = () => {
                 <div className="bg-white px-6 py-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-semibold text-gray-900">
-                      {selectedBrand ? "Edit Brand" : "Add Brand"}
+                      {selectedBrand ? t("brandsPage.editBrand") : t("brandsPage.addBrand")}
                     </h2>
                     <button
                       onClick={() => setIsModalOpen(false)}
                       className="text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
-                      <span className="sr-only">Close</span>
+                      <span className="sr-only">{t("common.close")}</span>
                       <FiX className="w-6 h-6" />
                     </button>
                   </div>
@@ -368,37 +419,74 @@ const BrandsPage = () => {
                 {/* Content */}
                 <div className="bg-white px-6 py-4">
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <label
-                        htmlFor="name"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        defaultValue={selectedBrand?.name || ""}
-                        className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                        required
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label
+                          htmlFor="nameEn"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          {t("brandsPage.nameEnglish")}
+                        </label>
+                        <input
+                          type="text"
+                          id="nameEn"
+                          name="nameEn"
+                          defaultValue={getLocalizedText(selectedBrand?.name, "en", "")}
+                          className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="nameAr"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          {t("brandsPage.nameArabic")}
+                        </label>
+                        <input
+                          type="text"
+                          id="nameAr"
+                          name="nameAr"
+                          defaultValue={getLocalizedText(selectedBrand?.name, "ar", "")}
+                          className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                          required
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label
-                        htmlFor="description"
-                        className="block text-sm font-medium text-gray-700"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="description"
-                        name="description"
-                        rows={3}
-                        defaultValue={selectedBrand?.description || ""}
-                        className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label
+                          htmlFor="descriptionEn"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          {t("brandsPage.descriptionEnglish")}
+                        </label>
+                        <textarea
+                          id="descriptionEn"
+                          name="descriptionEn"
+                          rows={3}
+                          defaultValue={getLocalizedText(selectedBrand?.description, "en", "")}
+                          className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="descriptionAr"
+                          className="block text-sm font-medium text-gray-700"
+                        >
+                          {t("brandsPage.descriptionArabic")}
+                        </label>
+                        <textarea
+                          id="descriptionAr"
+                          name="descriptionAr"
+                          rows={3}
+                          defaultValue={getLocalizedText(selectedBrand?.description, "ar", "")}
+                          className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -406,7 +494,7 @@ const BrandsPage = () => {
                         htmlFor="logo"
                         className="block text-sm font-medium text-gray-700"
                       >
-                        Logo
+                        {t("brandsPage.logo")}
                       </label>
                       <div className="mt-1 flex flex-col items-center">
                         <div className="w-full flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
@@ -430,7 +518,7 @@ const BrandsPage = () => {
                                 htmlFor="logo-upload"
                                 className="relative cursor-pointer bg-white rounded-md font-medium text-primary-600 hover:text-primary-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary-500"
                               >
-                                <span>Upload a file</span>
+                                <span>{t("brandsPage.uploadFile")}</span>
                                 <input
                                   id="logo-upload"
                                   name="logo"
@@ -440,10 +528,10 @@ const BrandsPage = () => {
                                   onChange={handleFileChange}
                                 />
                               </label>
-                              <p className="pl-1">or drag and drop</p>
+                              <p className="pl-1">{t("brandsPage.dragAndDrop")}</p>
                             </div>
                             <p className="text-xs text-gray-500">
-                              PNG, JPG, GIF up to 5MB
+                              {t("brandsPage.fileFormat")}
                             </p>
                           </div>
                         </div>
@@ -453,7 +541,7 @@ const BrandsPage = () => {
                           <div className="mt-4 relative">
                             <img
                               src={imagePreview}
-                              alt="Preview"
+                              alt={t("brandsPage.preview")}
                               className="h-32 w-32 object-cover rounded-lg"
                             />
                             <button
@@ -473,7 +561,7 @@ const BrandsPage = () => {
                         htmlFor="website"
                         className="block text-sm font-medium text-gray-700"
                       >
-                        Website
+                        {t("brandsPage.website")}
                       </label>
                       <input
                         type="url"
@@ -489,7 +577,7 @@ const BrandsPage = () => {
                         htmlFor="status"
                         className="block text-sm font-medium text-gray-700"
                       >
-                        Status
+                        {t("brandsPage.status")}
                       </label>
                       <select
                         id="status"
@@ -497,18 +585,18 @@ const BrandsPage = () => {
                         defaultValue={selectedBrand?.status || "active"}
                         className="mt-1 p-2 block w-full rounded-md border border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                       >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
+                        <option value="active">{t("brandsPage.active")}</option>
+                        <option value="inactive">{t("brandsPage.inactive")}</option>
                       </select>
                     </div>
 
-                    <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <div className="flex justify-end space-x-3 rtl:space-x-reverse pt-4 border-t border-gray-200">
                       <button
                         type="button"
                         onClick={() => setIsModalOpen(false)}
                         className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
                       >
-                        Cancel
+                        {t("common.cancel")}
                       </button>
                       <button
                         type="submit"
@@ -541,12 +629,12 @@ const BrandsPage = () => {
                                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                               ></path>
                             </svg>
-                            {selectedBrand ? "Saving..." : "Adding..."}
+                            {selectedBrand ? t("brandsPage.saving") : t("brandsPage.adding")}
                           </span>
                         ) : selectedBrand ? (
-                          "Save Changes"
+                          t("brandsPage.saveChanges")
                         ) : (
-                          "Add Brand"
+                          t("brandsPage.addBrand")
                         )}
                       </button>
                     </div>
@@ -579,14 +667,14 @@ const BrandsPage = () => {
                         <FiTrash2 className="h-6 w-6 text-red-600" />
                       </div>
                       <h2 className="ml-3 text-lg font-semibold text-gray-900">
-                        Delete Brand
+                        {t("brandsPage.deleteBrand")}
                       </h2>
                     </div>
                     <button
                       onClick={() => setIsDeleteModalOpen(false)}
                       className="text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
-                      <span className="sr-only">Close</span>
+                      <span className="sr-only">{t("common.close")}</span>
                       <FiX className="w-6 h-6" />
                     </button>
                   </div>
@@ -596,22 +684,21 @@ const BrandsPage = () => {
                 <div className="bg-white px-6 py-4">
                   <div className="mt-2">
                     <p className="text-sm text-gray-500">
-                      Are you sure you want to delete{" "}
+                      {t("brandsPage.deleteConfirmation")}{" "}
                       <span className="font-semibold text-gray-900">
-                        {brandToDelete.name}
+                        {getLocalizedText(brandToDelete.name, localStorage.getItem("language") || "en")}
                       </span>
-                      ? This action cannot be undone and will permanently delete
-                      this brand from the system.
+                      ? {t("brandsPage.deleteWarning")}
                     </p>
                   </div>
 
-                  <div className="mt-6 flex justify-end space-x-3">
+                  <div className="mt-6 flex justify-end space-x-3 rtl:space-x-reverse">
                     <button
                       type="button"
                       onClick={() => setIsDeleteModalOpen(false)}
                       className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                     >
-                      Cancel
+                      {t("common.cancel")}
                     </button>
                     <button
                       onClick={() => {
@@ -621,7 +708,7 @@ const BrandsPage = () => {
                       }}
                       className="inline-flex justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                     >
-                      Delete Brand
+                      {t("brandsPage.deleteBrand")}
                     </button>
                   </div>
                 </div>
